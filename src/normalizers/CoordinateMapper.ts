@@ -1,4 +1,5 @@
 import type { Landmark } from "../types";
+import { distance2D } from "../utils";
 import { getLandmarkByName } from "./LandmarkNormalizer";
 
 export interface Point2D {
@@ -34,10 +35,7 @@ export function calculateBodyScale(landmarks: Landmark[]): number | null {
 }
 
 export function calculateDistance(firstPoint: Point2D, secondPoint: Point2D): number {
-  const deltaX = secondPoint.x - firstPoint.x;
-  const deltaY = secondPoint.y - firstPoint.y;
-
-  return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  return distance2D(firstPoint, secondPoint);
 }
 
 function averagePoints(points: Array<Point2D | undefined>): Point2D | null {
