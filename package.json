@@ -1,0 +1,25 @@
+{
+  "name": "human-motion-tracking-plugin",
+  "version": "1.0.0",
+  "description": "Reusable camera-based human pose tracking plugin for gesture and workout movement detection.",
+  "homepage": "https://github.com/Mamduh5/Human-Motion-Tracking-Plugin#readme",
+  "bugs": {
+    "url": "https://github.com/Mamduh5/Human-Motion-Tracking-Plugin/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mamduh5/Human-Motion-Tracking-Plugin.git"
+  },
+  "license": "ISC",
+  "author": "mamduh",
+  "type": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
