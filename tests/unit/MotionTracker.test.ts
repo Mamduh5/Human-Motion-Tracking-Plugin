@@ -25,6 +25,8 @@ describe("MotionTracker", () => {
     const pose = createPose([
       landmark("leftShoulder", 11, 0.3, 0.4),
       landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
       landmark("leftWrist", 15, 0.3, 0.2),
       landmark("rightWrist", 16, 0.7, 0.2),
     ]);
