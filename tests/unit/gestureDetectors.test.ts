@@ -4,10 +4,36 @@ import { detectArmsOpen, detectBothHandsUp, detectLeftHandUp, detectRightHandUp,
 import type { Landmark, PoseResult } from "../../src/types";
 
 describe("gesture detectors", () => {
+  it("detects left hand up front-facing", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
+      landmark("leftWrist", 15, 0.3, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true, confidence: 1 });
+  });
+
+  it("detects right hand up front-facing", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectRightHandUp(pose)).toMatchObject({ name: "rightHandUp", active: true, confidence: 1 });
+  });
+
   it("detects both hands up front-facing", () => {
     const pose = createPose([
       landmark("leftShoulder", 11, 0.3, 0.4),
       landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
       landmark("leftWrist", 15, 0.3, 0.2),
       landmark("rightWrist", 16, 0.7, 0.2),
     ]);
@@ -15,6 +41,67 @@ describe("gesture detectors", () => {
     expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true, confidence: 1 });
     expect(detectRightHandUp(pose)).toMatchObject({ name: "rightHandUp", active: true, confidence: 1 });
     expect(detectBothHandsUp(pose)).toMatchObject({ name: "bothHandsUp", active: true, confidence: 1 });
+  });
+
+  it("does not detect both hands up when side-facing with one hand up", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.48, 0.4),
+      landmark("rightShoulder", 12, 0.52, 0.4),
+      landmark("leftHip", 23, 0.49, 0.7),
+      landmark("rightHip", 24, 0.51, 0.7),
+      landmark("leftWrist", 15, 0.48, 0.2),
+      landmark("rightWrist", 16, 0.52, 0.62),
+    ]);
+
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
+  });
+
+  it("does not emit leftHandUp for a side-facing right-hand raise", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.48, 0.4),
+      landmark("rightShoulder", 12, 0.52, 0.4),
+      landmark("leftHip", 23, 0.49, 0.7),
+      landmark("rightHip", 24, 0.51, 0.7),
+      landmark("leftWrist", 15, 0.49, 0.19),
+      landmark("rightWrist", 16, 0.52, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
+    expect(detectRightHandUp(pose)).toMatchObject({
+      name: "rightHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
+  });
+
+  it("does not emit rightHandUp for a side-facing left-hand raise", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.48, 0.4),
+      landmark("rightShoulder", 12, 0.52, 0.4),
+      landmark("leftHip", 23, 0.49, 0.7),
+      landmark("rightHip", 24, 0.51, 0.7),
+      landmark("leftWrist", 15, 0.48, 0.2),
+      landmark("rightWrist", 16, 0.51, 0.19),
+    ]);
+
+    expect(detectRightHandUp(pose)).toMatchObject({
+      name: "rightHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
   });
 
   it("does not detect both hands up when only the left hand is up", () => {
@@ -53,15 +140,21 @@ describe("gesture detectors", () => {
     const pose = createPose([
       landmark("leftShoulder", 11, 0.45, 0.4),
       landmark("rightShoulder", 12, 0.5, 0.4),
+      landmark("leftHip", 23, 0.46, 0.7),
+      landmark("rightHip", 24, 0.49, 0.7),
       landmark("leftWrist", 15, 0.42, 0.2),
       landmark("rightWrist", 16, 0.5, 0.19, 0.2),
     ]);
 
-    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true });
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
     expect(detectBothHandsUp(pose)).toMatchObject({
       name: "bothHandsUp",
       active: false,
-      metadata: { reason: "low-visibility" },
+      metadata: { reason: "not-front-facing" },
     });
   });
 

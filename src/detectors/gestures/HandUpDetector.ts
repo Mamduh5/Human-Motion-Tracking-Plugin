@@ -4,9 +4,10 @@ import { averageConfidence, isLandmarkVisible } from "../../utils";
 
 const MIN_VISIBILITY = 0.5;
 const HAND_UP_Y_MARGIN = 0.03;
+const MIN_FRONT_FACING_TORSO_WIDTH = 0.12;
 
 type HandSide = "left" | "right";
-type InactiveReason = "missing-landmarks" | "low-visibility" | "not-high-enough";
+type InactiveReason = "missing-landmarks" | "low-visibility" | "not-front-facing" | "not-high-enough";
 
 export function detectLeftHandUp(pose: PoseResult): GestureResult {
   return detectHandUp(pose, "left");
@@ -26,7 +27,7 @@ export function detectBothHandsUp(pose: PoseResult): GestureResult {
 
   const landmarks = [left.wrist, left.shoulder, right.wrist, right.shoulder];
   const confidence = averageConfidence(landmarks);
-  const inactiveReason = getHandUpInactiveReason(landmarks, [
+  const inactiveReason = getHandUpInactiveReason(pose, landmarks, [
     [left.wrist, left.shoulder],
     [right.wrist, right.shoulder],
   ]);
@@ -50,7 +51,7 @@ function detectHandUp(pose: PoseResult, side: HandSide): GestureResult {
 
   const landmarks = [wrist, shoulder];
   const confidence = averageConfidence(landmarks);
-  const inactiveReason = getHandUpInactiveReason(landmarks, [[wrist, shoulder]]);
+  const inactiveReason = getHandUpInactiveReason(pose, landmarks, [[wrist, shoulder]]);
 
   return createGestureResult(
     name,
@@ -68,7 +69,15 @@ function getRequiredLandmarks(pose: PoseResult, side: HandSide): { wrist?: Landm
   };
 }
 
-function getHandUpInactiveReason(landmarks: Landmark[], wristShoulderPairs: Array<[Landmark, Landmark]>): InactiveReason | undefined {
+function getHandUpInactiveReason(
+  pose: PoseResult,
+  landmarks: Landmark[],
+  wristShoulderPairs: Array<[Landmark, Landmark]>,
+): InactiveReason | undefined {
+  if (isSideFacing(pose)) {
+    return "not-front-facing";
+  }
+
   if (!landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY))) {
     return "low-visibility";
   }
@@ -82,6 +91,29 @@ function getHandUpInactiveReason(landmarks: Landmark[], wristShoulderPairs: Arra
 
 function isWristClearlyAboveShoulder(wrist: Landmark, shoulder: Landmark): boolean {
   return wrist.y < shoulder.y - HAND_UP_Y_MARGIN;
+}
+
+function isSideFacing(pose: PoseResult): boolean {
+  const shoulderWidth = getHorizontalWidth(pose, "leftShoulder", "rightShoulder");
+  const hipWidth = getHorizontalWidth(pose, "leftHip", "rightHip");
+  const availableWidths = [shoulderWidth, hipWidth].filter((width): width is number => typeof width === "number");
+
+  if (availableWidths.length === 0) {
+    return false;
+  }
+
+  return Math.max(...availableWidths) < MIN_FRONT_FACING_TORSO_WIDTH;
+}
+
+function getHorizontalWidth(pose: PoseResult, leftLandmarkName: string, rightLandmarkName: string): number | undefined {
+  const left = getLandmarkByName(pose.landmarks, leftLandmarkName);
+  const right = getLandmarkByName(pose.landmarks, rightLandmarkName);
+
+  if (!left || !right || !isLandmarkVisible(left, MIN_VISIBILITY) || !isLandmarkVisible(right, MIN_VISIBILITY)) {
+    return undefined;
+  }
+
+  return Math.abs(left.x - right.x);
 }
 
 function createGestureResult(
