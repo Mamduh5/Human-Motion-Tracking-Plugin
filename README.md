@@ -23,3 +23,15 @@ npm run dev:vanilla
 ```
 
 Open the local Vite URL in a browser, allow camera access, then use the Start and Stop buttons. The example imports the SDK from `src/`, shows the camera preview, draws pose landmarks on a canvas overlay, and displays active `leftHandUp`, `rightHandUp`, and `bothHandsUp` gestures.
+
+## React Adapter
+
+React apps can import the optional hook from the React subpath:
+
+```ts
+import { useMotionTracker } from "human-motion-tracking-plugin/react";
+```
+
+The hook exposes `start`, `stop`, `state`, `latestPose`, `latestGestures`, `latestExercises`, and `error`, and stops the tracker automatically when the component unmounts. React is an optional peer dependency, so non-React SDK consumers do not load it.
+
+Manual testing: use the hook inside a React component, call `start()` from a user gesture, verify camera permission opens, and confirm `stop()` or component unmount stops the camera.

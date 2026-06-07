@@ -19,6 +19,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/adapters/react/index.d.ts",
+      "import": "./dist/adapters/react/index.js"
     }
   },
   "files": [
@@ -38,9 +42,18 @@
     "build:vanilla": "vite build examples/vanilla-web"
   },
   "devDependencies": {
+    "@types/react": "^19.2.17",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35"
