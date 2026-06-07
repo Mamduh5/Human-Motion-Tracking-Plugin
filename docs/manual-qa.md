@@ -59,9 +59,11 @@ Use this checklist to verify the vanilla web demo from a clean checkout or after
 - [ ] Start with both hands down.
 - [ ] Confirm `Active gestures` reads `None`.
 - [ ] Raise only the left hand above shoulder/head level.
+- [ ] Confirm `handUp` appears in `Active gestures`.
 - [ ] Confirm `leftHandUp` appears in `Active gestures`.
 - [ ] Lower the left hand.
 - [ ] Confirm `leftHandUp` is removed from `Active gestures`.
+- [ ] Confirm `handUp` is removed from `Active gestures` if no other hand is raised.
 - [ ] Confirm raising only the left hand does not incorrectly require the right hand to be raised.
 
 ## Right Hand Up Detection
@@ -69,15 +71,28 @@ Use this checklist to verify the vanilla web demo from a clean checkout or after
 - [ ] Start with both hands down.
 - [ ] Confirm `Active gestures` reads `None`.
 - [ ] Raise only the right hand above shoulder/head level.
+- [ ] Confirm `handUp` appears in `Active gestures`.
 - [ ] Confirm `rightHandUp` appears in `Active gestures`.
 - [ ] Lower the right hand.
 - [ ] Confirm `rightHandUp` is removed from `Active gestures`.
+- [ ] Confirm `handUp` is removed from `Active gestures` if no other hand is raised.
 - [ ] Confirm raising only the right hand does not incorrectly require the left hand to be raised.
+
+## Side-Facing Hand Up Detection
+
+- [ ] Start with both hands down.
+- [ ] Turn mostly side-facing while keeping one shoulder/wrist pair visible.
+- [ ] Raise the visible wrist clearly above its matching shoulder.
+- [ ] Confirm `handUp` appears in `Active gestures`.
+- [ ] Confirm `leftHandUp`, `rightHandUp`, and `bothHandsUp` may stay inactive while side-facing.
+- [ ] Lower the visible wrist below shoulder level.
+- [ ] Confirm `handUp` is removed from `Active gestures`.
 
 ## Both Hands Up Detection
 
 - [ ] Start with both hands down.
 - [ ] Raise both hands above shoulder/head level.
+- [ ] Confirm `handUp` appears in `Active gestures`.
 - [ ] Confirm `bothHandsUp` appears in `Active gestures`.
 - [ ] Confirm `leftHandUp` and `rightHandUp` may also appear while both hands are raised.
 - [ ] Lower one hand.

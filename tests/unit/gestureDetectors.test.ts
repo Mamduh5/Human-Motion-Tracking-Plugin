@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { detectArmsOpen, detectBothHandsUp, detectLeftHandUp, detectRightHandUp, detectStanding } from "../../src/detectors";
+import {
+  detectArmsOpen,
+  detectBothHandsUp,
+  detectHandUp,
+  detectLeftHandUp,
+  detectRightHandUp,
+  detectStanding,
+} from "../../src/detectors";
 import type { Landmark, PoseResult } from "../../src/types";
 
 describe("gesture detectors", () => {
@@ -56,6 +63,139 @@ describe("gesture detectors", () => {
     expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true, confidence: 1 });
     expect(detectRightHandUp(pose)).toMatchObject({ name: "rightHandUp", active: true, confidence: 1 });
     expect(detectBothHandsUp(pose)).toMatchObject({ name: "bothHandsUp", active: true, confidence: 1 });
+  });
+
+  it("detects generic hand up for a front-facing left hand raise", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.6),
+    ]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: true,
+      confidence: 1,
+      metadata: {
+        reason: "active",
+        activeSideCandidates: ["left"],
+        leftVisible: true,
+        rightVisible: true,
+        leftWristY: 0.2,
+        leftShoulderY: 0.4,
+        rightWristY: 0.6,
+        rightShoulderY: 0.4,
+        yMargin: 0.03,
+      },
+    });
+  });
+
+  it("detects generic hand up for a front-facing right hand raise", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
+      landmark("leftWrist", 15, 0.3, 0.6),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        activeSideCandidates: ["right"],
+        leftVisible: true,
+        rightVisible: true,
+      },
+    });
+  });
+
+  it("detects generic hand up for a side-facing one visible hand raise", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.48, 0.4),
+      landmark("rightShoulder", 12, 0.52, 0.4, 0.2),
+      landmark("leftHip", 23, 0.49, 0.7),
+      landmark("rightHip", 24, 0.51, 0.7),
+      landmark("leftWrist", 15, 0.48, 0.2),
+      landmark("rightWrist", 16, 0.52, 0.62, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-front-facing" },
+    });
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        activeSideCandidates: ["left"],
+        leftVisible: true,
+        rightVisible: false,
+      },
+    });
+  });
+
+  it("does not detect generic hand up when no hands are raised", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.6),
+      landmark("rightWrist", 16, 0.7, 0.6),
+    ]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: false,
+      metadata: {
+        reason: "not-high-enough",
+        activeSideCandidates: [],
+        leftVisible: true,
+        rightVisible: true,
+      },
+    });
+  });
+
+  it("does not detect generic hand up when the raised wrist has low visibility", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.2, 0.4),
+    ]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: false,
+      metadata: {
+        reason: "low-visibility",
+        activeSideCandidates: [],
+        leftVisible: false,
+        rightVisible: false,
+      },
+    });
+  });
+
+  it("returns inactive generic hand up metadata when landmarks are missing", () => {
+    const pose = createPose([landmark("leftShoulder", 11, 0.3, 0.4)]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: false,
+      confidence: 0,
+      metadata: {
+        reason: "missing-landmarks",
+        activeSideCandidates: [],
+        leftVisible: false,
+        rightVisible: false,
+        leftShoulderY: 0.4,
+        yMargin: 0.03,
+      },
+    });
   });
 
   it("does not detect both hands up when side-facing with one hand up", () => {

@@ -8,6 +8,7 @@ export {
   SquatAnalyzer,
   detectArmsOpen,
   detectBothHandsUp,
+  detectHandUp,
   detectLeftHandUp,
   detectRightHandUp,
   detectStanding,

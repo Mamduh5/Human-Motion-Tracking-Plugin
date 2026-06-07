@@ -25,11 +25,56 @@ interface HandUpEvaluation {
 }
 
 export function detectLeftHandUp(pose: PoseResult): GestureResult {
-  return detectHandUp(pose, "left");
+  return detectAnatomicalHandUp(pose, "left");
 }
 
 export function detectRightHandUp(pose: PoseResult): GestureResult {
-  return detectHandUp(pose, "right");
+  return detectAnatomicalHandUp(pose, "right");
+}
+
+export function detectHandUp(pose: PoseResult): GestureResult {
+  const left = getRequiredLandmarks(pose, "left");
+  const right = getRequiredLandmarks(pose, "right");
+  const requiredLandmarks = {
+    leftWrist: left.wrist,
+    leftShoulder: left.shoulder,
+    rightWrist: right.wrist,
+    rightShoulder: right.shoulder,
+  };
+  const completeSides = [
+    ["left", left] as const,
+    ["right", right] as const,
+  ].filter((side): side is readonly [HandSide, { wrist: Landmark; shoulder: Landmark }] => {
+    return Boolean(side[1].wrist && side[1].shoulder);
+  });
+
+  if (completeSides.length === 0) {
+    return createGestureResult(
+      "handUp",
+      pose.timestamp,
+      false,
+      0,
+      createGenericHandUpMetadata({ reason: "missing-landmarks", requiredLandmarks, activeSideCandidates: [] }),
+    );
+  }
+
+  const visibleSides = completeSides.filter(([, landmarks]) => {
+    return isLandmarkVisible(landmarks.wrist, MIN_VISIBILITY) && isLandmarkVisible(landmarks.shoulder, MIN_VISIBILITY);
+  });
+  const activeSideCandidates = visibleSides
+    .filter(([, landmarks]) => isWristClearlyAboveShoulder(landmarks.wrist, landmarks.shoulder))
+    .map(([side]) => side);
+  const active = activeSideCandidates.length > 0;
+  const reason: HandUpReason = active ? "active" : visibleSides.length === 0 ? "low-visibility" : "not-high-enough";
+  const confidence = averageConfidence(completeSides.flatMap(([, landmarks]) => [landmarks.wrist, landmarks.shoulder]));
+
+  return createGestureResult(
+    "handUp",
+    pose.timestamp,
+    active,
+    confidence,
+    createGenericHandUpMetadata({ reason, requiredLandmarks, activeSideCandidates }),
+  );
 }
 
 export function detectBothHandsUp(pose: PoseResult): GestureResult {
@@ -75,7 +120,7 @@ export function detectBothHandsUp(pose: PoseResult): GestureResult {
   );
 }
 
-function detectHandUp(pose: PoseResult, side: HandSide): GestureResult {
+function detectAnatomicalHandUp(pose: PoseResult, side: HandSide): GestureResult {
   const { wrist, shoulder } = getRequiredLandmarks(pose, side);
   const name = side === "left" ? "leftHandUp" : "rightHandUp";
   const requiredLandmarks = {
@@ -194,6 +239,34 @@ function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, un
     yMargin: HAND_UP_Y_MARGIN,
     requiredVisibility: getRequiredVisibility(options.requiredLandmarks),
   };
+}
+
+function createGenericHandUpMetadata(options: {
+  reason: HandUpReason;
+  requiredLandmarks: Record<string, Landmark | undefined>;
+  activeSideCandidates: HandSide[];
+}): Record<string, unknown> {
+  const leftWrist = options.requiredLandmarks.leftWrist;
+  const leftShoulder = options.requiredLandmarks.leftShoulder;
+  const rightWrist = options.requiredLandmarks.rightWrist;
+  const rightShoulder = options.requiredLandmarks.rightShoulder;
+
+  return {
+    reason: options.reason,
+    activeSideCandidates: options.activeSideCandidates,
+    leftVisible: areLandmarksVisible(leftWrist, leftShoulder),
+    rightVisible: areLandmarksVisible(rightWrist, rightShoulder),
+    leftWristY: leftWrist?.y,
+    leftShoulderY: leftShoulder?.y,
+    rightWristY: rightWrist?.y,
+    rightShoulderY: rightShoulder?.y,
+    yMargin: HAND_UP_Y_MARGIN,
+    requiredVisibility: getRequiredVisibility(options.requiredLandmarks),
+  };
+}
+
+function areLandmarksVisible(...landmarks: Array<Landmark | undefined>): boolean {
+  return landmarks.every((landmark) => Boolean(landmark && isLandmarkVisible(landmark, MIN_VISIBILITY)));
 }
 
 function getRequiredVisibility(requiredLandmarks: Record<string, Landmark | undefined>): Record<string, number | undefined> {

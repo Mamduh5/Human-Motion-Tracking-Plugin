@@ -99,6 +99,35 @@ describe("MotionTracker", () => {
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
   });
 
+  it("emits active true for the built-in generic handUp detector", async () => {
+    const sideFacingHandUpPose = createPose([
+      landmark("leftShoulder", 11, 0.48, 0.4),
+      landmark("rightShoulder", 12, 0.52, 0.4),
+      landmark("leftHip", 23, 0.49, 0.7),
+      landmark("rightHip", 24, 0.51, 0.7),
+      landmark("leftWrist", 15, 0.48, 0.2),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([sideFacingHandUpPose, sideFacingHandUpPose, sideFacingHandUpPose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["handUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "handUp", active: true }));
+  });
+
   it("emits active false after three stable inactive frames following an active gesture", async () => {
     const { tracker, raf } = createMotionTracker({
       landmarkTracker: createSequentialLandmarkTrackerMock([

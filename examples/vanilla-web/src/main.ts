@@ -41,7 +41,7 @@ const config: MotionTrackerConfig = {
   },
   gestures: {
     enabled: true,
-    names: ["leftHandUp", "rightHandUp", "bothHandsUp"],
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
     minConfidence: 0.5,
   },
   exercises: {

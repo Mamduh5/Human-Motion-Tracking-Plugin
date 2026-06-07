@@ -151,7 +151,7 @@ const tracker = new MotionTracker({
   ...config,
   gestures: {
     enabled: true,
-    names: ["leftHandUp", "rightHandUp", "bothHandsUp"],
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
     minConfidence: 0.5,
   },
   exercises: {
@@ -174,12 +174,13 @@ tracker.on("gesture", (gesture) => {
 await tracker.start();
 ```
 
-The hand-up detectors compare wrist and shoulder landmarks. A hand is considered up when the wrist landmark is above the matching shoulder landmark and the required landmarks are visible enough.
+The hand-up detectors compare wrist and shoulder landmarks. A hand is considered up when the wrist landmark is clearly above the matching shoulder landmark and the required landmarks are visible enough.
 
-`leftHandUp` and `rightHandUp` use MediaPipe's anatomical landmark labels, so "left" means the tracked person's left side, not the viewer's left side in a mirrored camera preview. Left/right-specific hand-up gestures also check whether the pose appears front-facing; side-facing poses may disable those specific gestures to avoid mislabeled hands. For side-facing interactions, prefer generic gesture designs as they are added, or build a plugin-level gesture that does not depend on anatomical left/right labels.
+`leftHandUp` and `rightHandUp` use MediaPipe's anatomical landmark labels, so "left" means the tracked person's left side, not the viewer's left side in a mirrored camera preview. `leftHandUp`, `rightHandUp`, and `bothHandsUp` are intended for mostly front-facing poses and may stay inactive for side-facing poses to avoid mislabeled hands. For side-facing workout positions, prefer `handUp`; it activates when at least one clearly visible wrist is above its matching shoulder and does not require a front-facing body.
 
 Built-in gesture names include:
 
+- `handUp`
 - `leftHandUp`
 - `rightHandUp`
 - `bothHandsUp`
@@ -311,7 +312,7 @@ export function MotionTrackerPanel() {
       },
       gestures: {
         enabled: true,
-        names: ["leftHandUp", "rightHandUp", "bothHandsUp"],
+        names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
         minConfidence: 0.5,
       },
       exercises: {
@@ -363,8 +364,9 @@ Then:
 
 1. Allow camera access when the browser prompts.
 2. Click Start.
-3. Raise one or both hands to see `leftHandUp`, `rightHandUp`, or `bothHandsUp`.
-4. Click Stop to stop the stream.
+3. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, or `bothHandsUp`.
+4. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
+5. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
 

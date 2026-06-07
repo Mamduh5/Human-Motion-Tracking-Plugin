@@ -3,6 +3,7 @@ export type { SquatAnalyzerOptions, SquatStage } from "./exercises";
 export {
   detectArmsOpen,
   detectBothHandsUp,
+  detectHandUp,
   detectLeftHandUp,
   detectRightHandUp,
   detectStanding,

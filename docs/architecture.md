@@ -73,6 +73,7 @@ Utilities provide named landmark lookup, confidence calculation, visibility filt
 
 Gesture detectors run after a valid pose is emitted when `config.gestures.enabled` is true. Built-in names are:
 
+- `handUp`
 - `leftHandUp`
 - `rightHandUp`
 - `bothHandsUp`
@@ -84,6 +85,8 @@ Exercise analyzers run when `config.exercises.enabled` is true. The built-in ana
 - `squat`
 
 The squat analyzer tracks stage transitions and repetition count from visible hip, knee, and ankle landmarks.
+
+`leftHandUp`, `rightHandUp`, and `bothHandsUp` use anatomical left/right labels and require a mostly front-facing body. `handUp` is the side-view-safe option for workout positions where either visible wrist above its matching shoulder should count.
 
 ### Event System
 

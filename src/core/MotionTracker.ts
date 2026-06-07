@@ -4,6 +4,7 @@ import {
   SquatAnalyzer,
   detectArmsOpen,
   detectBothHandsUp,
+  detectHandUp,
   detectLeftHandUp,
   detectRightHandUp,
   detectStanding,
@@ -34,6 +35,7 @@ export interface MotionTrackerDependencies {
 }
 
 const GESTURE_DETECTORS: Record<string, GestureDetector> = {
+  handUp: detectHandUp,
   leftHandUp: detectLeftHandUp,
   rightHandUp: detectRightHandUp,
   bothHandsUp: detectBothHandsUp,

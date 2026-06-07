@@ -43,7 +43,7 @@ const config: MotionTrackerConfig = {
   },
   gestures: {
     enabled: true,
-    names: ["leftHandUp", "rightHandUp", "bothHandsUp"],
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
     minConfidence: 0.5,
   },
   exercises: {
@@ -112,7 +112,9 @@ Run the camera demo from the repository root:
 npm run dev:vanilla
 ```
 
-Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active `leftHandUp`, `rightHandUp`, and `bothHandsUp` gestures.
+Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active `handUp`, `leftHandUp`, `rightHandUp`, and `bothHandsUp` gestures.
+
+`leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
 
 ## Documentation
 
