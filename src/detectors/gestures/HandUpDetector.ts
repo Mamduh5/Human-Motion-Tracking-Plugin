@@ -10,12 +10,16 @@ type HandSide = "left" | "right";
 type InactiveReason = "missing-landmarks" | "low-visibility" | "not-front-facing" | "not-high-enough";
 type HandUpReason = InactiveReason | "active";
 type HandUpYMetadata = number | Partial<Record<HandSide, number>>;
+type BodyOrientation = "front" | "side" | "unknown";
 
 interface HandUpMetadataOptions {
   reason: HandUpReason;
   requiredLandmarks: Record<string, Landmark | undefined>;
   wristY?: HandUpYMetadata;
   shoulderY?: HandUpYMetadata;
+  orientation?: BodyOrientation;
+  shoulderWidth?: number;
+  hipWidth?: number;
   torsoWidth?: number;
   torsoHeight?: number;
   frontFacingScore?: number;
@@ -24,6 +28,9 @@ interface HandUpMetadataOptions {
 
 interface HandUpEvaluation {
   inactiveReason?: InactiveReason;
+  orientation: BodyOrientation;
+  shoulderWidth?: number;
+  hipWidth?: number;
   torsoWidth?: number;
   torsoHeight?: number;
   frontFacingScore?: number;
@@ -128,6 +135,9 @@ export function detectBothHandsUp(pose: PoseResult): GestureResult {
       requiredLandmarks,
       wristY: { left: left.wrist.y, right: right.wrist.y },
       shoulderY: { left: left.shoulder.y, right: right.shoulder.y },
+      orientation: evaluation.orientation,
+      shoulderWidth: evaluation.shoulderWidth,
+      hipWidth: evaluation.hipWidth,
       torsoWidth: evaluation.torsoWidth,
       torsoHeight: evaluation.torsoHeight,
       frontFacingScore: evaluation.frontFacingScore,
@@ -174,6 +184,9 @@ function detectAnatomicalHandUp(pose: PoseResult, side: HandSide): GestureResult
       requiredLandmarks,
       wristY: wrist.y,
       shoulderY: shoulder.y,
+      orientation: evaluation.orientation,
+      shoulderWidth: evaluation.shoulderWidth,
+      hipWidth: evaluation.hipWidth,
       torsoWidth: evaluation.torsoWidth,
       torsoHeight: evaluation.torsoHeight,
       frontFacingScore: evaluation.frontFacingScore,
@@ -194,53 +207,64 @@ function evaluateHandUp(
   landmarks: Landmark[],
   wristShoulderPairs: Array<[Landmark, Landmark]>,
 ): HandUpEvaluation {
-  const frontFacingEvaluation = evaluateFrontFacing(pose);
+  const orientationEvaluation = evaluateBodyOrientation(pose);
 
-  if (frontFacingEvaluation.inactiveReason) {
-    return frontFacingEvaluation;
+  if (orientationEvaluation.inactiveReason) {
+    return orientationEvaluation;
   }
 
   if (!landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY))) {
-    return { ...frontFacingEvaluation, inactiveReason: "low-visibility" };
+    return { ...orientationEvaluation, inactiveReason: "low-visibility" };
   }
 
   if (!wristShoulderPairs.every(([wrist, shoulder]) => isWristClearlyAboveShoulder(wrist, shoulder))) {
-    return { ...frontFacingEvaluation, inactiveReason: "not-high-enough" };
+    return { ...orientationEvaluation, inactiveReason: "not-high-enough" };
   }
 
-  return frontFacingEvaluation;
+  return orientationEvaluation;
 }
 
 function isWristClearlyAboveShoulder(wrist: Landmark, shoulder: Landmark): boolean {
   return wrist.y < shoulder.y - HAND_UP_Y_MARGIN;
 }
 
-function evaluateFrontFacing(pose: PoseResult): HandUpEvaluation {
+function evaluateBodyOrientation(pose: PoseResult): HandUpEvaluation {
   const torso = getTorsoLandmarks(pose);
-  const torsoLandmarks = [torso.leftShoulder, torso.rightShoulder, torso.leftHip, torso.rightHip];
 
-  if (torsoLandmarks.some((landmark) => !landmark)) {
-    return { inactiveReason: "missing-landmarks", frontFacingThreshold: MIN_FRONT_FACING_SCORE };
+  if (!torso.leftShoulder || !torso.rightShoulder) {
+    return { orientation: "unknown", frontFacingThreshold: MIN_FRONT_FACING_SCORE };
   }
 
-  const completeTorsoLandmarks = torsoLandmarks as [Landmark, Landmark, Landmark, Landmark];
+  const shoulderWidth = Math.abs(torso.leftShoulder.x - torso.rightShoulder.x);
 
-  if (!completeTorsoLandmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY))) {
-    return { inactiveReason: "low-visibility", frontFacingThreshold: MIN_FRONT_FACING_SCORE };
+  if (
+    !isLandmarkVisible(torso.leftShoulder, MIN_VISIBILITY) ||
+    !isLandmarkVisible(torso.rightShoulder, MIN_VISIBILITY) ||
+    !torso.leftHip ||
+    !torso.rightHip ||
+    !isLandmarkVisible(torso.leftHip, MIN_VISIBILITY) ||
+    !isLandmarkVisible(torso.rightHip, MIN_VISIBILITY)
+  ) {
+    return {
+      orientation: "unknown",
+      shoulderWidth,
+      frontFacingThreshold: MIN_FRONT_FACING_SCORE,
+    };
   }
 
-  const [leftShoulder, rightShoulder, leftHip, rightHip] = completeTorsoLandmarks;
-  const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
-  const hipWidth = Math.abs(leftHip.x - rightHip.x);
+  const hipWidth = Math.abs(torso.leftHip.x - torso.rightHip.x);
   const torsoWidth = Math.max(shoulderWidth, hipWidth);
-  const shoulderCenter = getMidpoint(leftShoulder, rightShoulder);
-  const hipCenter = getMidpoint(leftHip, rightHip);
+  const shoulderCenter = getMidpoint(torso.leftShoulder, torso.rightShoulder);
+  const hipCenter = getMidpoint(torso.leftHip, torso.rightHip);
   const torsoHeight = distance2D(shoulderCenter, hipCenter);
   const frontFacingScore = torsoHeight > 0 ? torsoWidth / torsoHeight : 0;
 
   if (frontFacingScore < MIN_FRONT_FACING_SCORE) {
     return {
+      orientation: "side",
       inactiveReason: "not-front-facing",
+      shoulderWidth,
+      hipWidth,
       torsoWidth,
       torsoHeight,
       frontFacingScore,
@@ -249,6 +273,9 @@ function evaluateFrontFacing(pose: PoseResult): HandUpEvaluation {
   }
 
   return {
+    orientation: "front",
+    shoulderWidth,
+    hipWidth,
     torsoWidth,
     torsoHeight,
     frontFacingScore,
@@ -291,6 +318,9 @@ function createGestureResult(
 function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, unknown> {
   return {
     reason: options.reason,
+    orientation: options.orientation,
+    shoulderWidth: options.shoulderWidth,
+    hipWidth: options.hipWidth,
     torsoWidth: options.torsoWidth,
     torsoHeight: options.torsoHeight,
     frontFacingScore: options.frontFacingScore,

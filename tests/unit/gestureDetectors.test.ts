@@ -23,6 +23,7 @@ describe("gesture detectors", () => {
       confidence: 1,
       metadata: expect.objectContaining({
         reason: "active",
+        orientation: "front",
         torsoWidth: expect.any(Number),
         torsoHeight: expect.any(Number),
         frontFacingScore: expect.any(Number),
@@ -59,6 +60,88 @@ describe("gesture detectors", () => {
     expect(detectBothHandsUp(pose)).toMatchObject({ name: "bothHandsUp", active: true, confidence: 1 });
   });
 
+  it("detects close-up left hand up when hips are missing", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.6),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        orientation: "unknown",
+        shoulderWidth: expect.closeTo(0.4),
+      },
+    });
+  });
+
+  it("detects close-up right hand up when hips are missing", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.3, 0.6),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectRightHandUp(pose)).toMatchObject({
+      name: "rightHandUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        orientation: "unknown",
+        shoulderWidth: expect.closeTo(0.4),
+      },
+    });
+  });
+
+  it("detects close-up both hands up when hips are missing", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        orientation: "unknown",
+      },
+    });
+  });
+
+  it("detects close-up generic hand up when hips are missing", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.6),
+    ]);
+
+    expect(detectHandUp(pose)).toMatchObject({
+      name: "handUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        activeSideCandidates: ["left"],
+      },
+    });
+  });
+
+  it("does not report missing landmarks for anatomical gestures when only hips are missing", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose).metadata).toMatchObject({ reason: "active", orientation: "unknown" });
+    expect(detectRightHandUp(pose).metadata).toMatchObject({ reason: "active", orientation: "unknown" });
+    expect(detectBothHandsUp(pose).metadata).toMatchObject({ reason: "active", orientation: "unknown" });
+  });
+
   it("detects left hand up for a smaller full-body front-facing pose", () => {
     const pose = createPose([...smallFrontFacingTorso(), landmark("leftWrist", 15, 0.455, 0.22)]);
 
@@ -67,6 +150,7 @@ describe("gesture detectors", () => {
       active: true,
       metadata: {
         reason: "active",
+        orientation: "front",
         torsoWidth: expect.closeTo(0.09),
         torsoHeight: expect.closeTo(0.2),
         frontFacingScore: expect.closeTo(0.45),
@@ -83,6 +167,7 @@ describe("gesture detectors", () => {
       active: true,
       metadata: {
         reason: "active",
+        orientation: "front",
         torsoWidth: expect.closeTo(0.09),
         torsoHeight: expect.closeTo(0.2),
         frontFacingScore: expect.closeTo(0.45),
@@ -103,6 +188,7 @@ describe("gesture detectors", () => {
       active: true,
       metadata: {
         reason: "active",
+        orientation: "front",
         torsoWidth: expect.closeTo(0.09),
         torsoHeight: expect.closeTo(0.2),
         frontFacingScore: expect.closeTo(0.45),
@@ -157,7 +243,7 @@ describe("gesture detectors", () => {
 
   it("detects generic hand up for a side-facing one visible hand raise", () => {
     const pose = createPose([
-      ...sideFacingTorso({ rightShoulderVisibility: 0.2 }),
+      ...sideFacingTorso(),
       landmark("leftWrist", 15, 0.48, 0.2),
       landmark("rightWrist", 16, 0.52, 0.62, 0.2),
     ]);
@@ -165,7 +251,7 @@ describe("gesture detectors", () => {
     expect(detectLeftHandUp(pose)).toMatchObject({
       name: "leftHandUp",
       active: false,
-      metadata: { reason: "low-visibility" },
+      metadata: { reason: "not-front-facing", orientation: "side" },
     });
     expect(detectHandUp(pose)).toMatchObject({
       name: "handUp",
@@ -191,6 +277,7 @@ describe("gesture detectors", () => {
       active: false,
       metadata: {
         reason: "not-front-facing",
+        orientation: "side",
         torsoWidth: expect.closeTo(0.04),
         torsoHeight: expect.closeTo(0.3),
         frontFacingScore: expect.closeTo(0.1333333333),
@@ -476,6 +563,13 @@ function createPose(landmarks: Landmark[]): PoseResult {
     landmarks,
     confidence: 1,
   };
+}
+
+function closeUpShoulders(): Landmark[] {
+  return [
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+  ];
 }
 
 function closeFrontFacingTorso(): Landmark[] {

@@ -130,6 +130,32 @@ describe("MotionTracker", () => {
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "handUp", active: true }));
   });
 
+  it("keeps all hand-up gesture detectors in the MotionTracker registry", async () => {
+    const pose = createCloseUpBothHandsUpPose();
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose, pose, pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "handUp", active: true }));
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "rightHandUp", active: true }));
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "bothHandsUp", active: true }));
+  });
+
   it("emits active false after three stable inactive frames following an active gesture", async () => {
     const { tracker, raf } = createMotionTracker({
       landmarkTracker: createSequentialLandmarkTrackerMock([
@@ -461,6 +487,15 @@ function createBothHandsUpPose(): PoseResult {
     landmark("rightShoulder", 12, 0.7, 0.4),
     landmark("leftHip", 23, 0.35, 0.7),
     landmark("rightHip", 24, 0.65, 0.7),
+    landmark("leftWrist", 15, 0.3, 0.2),
+    landmark("rightWrist", 16, 0.7, 0.2),
+  ]);
+}
+
+function createCloseUpBothHandsUpPose(): PoseResult {
+  return createPose([
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
     landmark("leftWrist", 15, 0.3, 0.2),
     landmark("rightWrist", 16, 0.7, 0.2),
   ]);
