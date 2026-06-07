@@ -9,6 +9,7 @@ import {
   detectStanding,
 } from "../detectors";
 import { EventEmitter } from "../events";
+import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugins";
 import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
 import type { ExerciseResult, GestureResult, MotionTrackerConfig, MotionTrackerEventMap, PoseResult, TrackerErrorEvent } from "../types";
 import { getTimestamp } from "../utils";
@@ -51,6 +52,7 @@ export class MotionTracker {
   private readonly requestFrame: RequestAnimationFrame;
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
+  private readonly pluginManager: PluginManager;
   private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
@@ -68,6 +70,7 @@ export class MotionTracker {
     this.requestFrame = dependencies.requestAnimationFrame ?? getRequestAnimationFrame();
     this.cancelFrame = dependencies.cancelAnimationFrame ?? getCancelAnimationFrame();
     this.now = dependencies.now ?? getTimestamp;
+    this.pluginManager = new PluginManager(this.createPluginApi());
   }
 
   async start(): Promise<void> {
@@ -88,7 +91,9 @@ export class MotionTracker {
         ...this.state,
         status: "running",
       };
-      this.events.emit("started", { timestamp: this.state.startedAt ?? this.now() });
+      const startedEvent = { timestamp: this.state.startedAt ?? this.now() };
+      this.events.emit("started", startedEvent);
+      this.pluginManager.notifyStart(startedEvent);
       this.scheduleNextFrame();
     } catch (error) {
       this.handleError(error);
@@ -113,7 +118,9 @@ export class MotionTracker {
       status: "stopped",
       stoppedAt,
     };
-    this.events.emit("stopped", { timestamp: stoppedAt });
+    const stoppedEvent = { timestamp: stoppedAt };
+    this.events.emit("stopped", stoppedEvent);
+    this.pluginManager.notifyStop(stoppedEvent);
   }
 
   on<TEventName extends keyof MotionTrackerEventMap>(
@@ -138,6 +145,16 @@ export class MotionTracker {
     return { ...this.state };
   }
 
+  registerPlugin(plugin: MotionPlugin): this {
+    this.pluginManager.register(plugin);
+
+    return this;
+  }
+
+  unregisterPlugin(name: string): boolean {
+    return this.pluginManager.unregister(name);
+  }
+
   private scheduleNextFrame(): void {
     this.animationFrameId = this.requestFrame((timestamp) => {
       this.processFrame(timestamp);
@@ -158,6 +175,7 @@ export class MotionTracker {
 
       if (pose && pose.confidence >= this.config.minConfidence) {
         this.events.emit("pose", pose);
+        this.pluginManager.notifyPose(pose);
         this.emitGestures(pose);
         this.emitExercises(pose);
       }
@@ -188,7 +206,7 @@ export class MotionTracker {
       const gesture = detector(pose);
 
       if (gesture.confidence >= (this.config.gestures.minConfidence ?? 0)) {
-        this.events.emit("gesture", gesture);
+        this.emitGestureEvent(gesture);
       }
     }
   }
@@ -210,7 +228,7 @@ export class MotionTracker {
       const exercise = analyzer.analyze(pose);
 
       if (exercise.confidence >= (this.config.exercises.minConfidence ?? 0)) {
-        this.events.emit("exercise", exercise);
+        this.emitExerciseEvent(exercise);
       }
     }
   }
@@ -238,6 +256,28 @@ export class MotionTracker {
     for (const analyzer of this.exerciseAnalyzers.values()) {
       analyzer.reset?.();
     }
+  }
+
+  private emitGestureEvent(gesture: GestureResult): void {
+    this.events.emit("gesture", gesture);
+    this.pluginManager.notifyGesture(gesture);
+  }
+
+  private emitExerciseEvent(exercise: ExerciseResult): void {
+    this.events.emit("exercise", exercise);
+    this.pluginManager.notifyExercise(exercise);
+  }
+
+  private createPluginApi(): MotionPluginApi {
+    return {
+      emitGesture: (gesture) => {
+        this.emitGestureEvent(gesture);
+      },
+      emitExercise: (exercise) => {
+        this.emitExerciseEvent(exercise);
+      },
+      getState: () => this.getState(),
+    };
   }
 
   private handleError(error: unknown): void {
