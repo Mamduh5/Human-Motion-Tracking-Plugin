@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { MotionTracker } from "../../src/core";
 import type { CameraSource } from "../../src/camera";
+import type { MotionPlugin } from "../../src/plugins";
 import type { MotionLandmarkTracker } from "../../src/trackers";
 import type { Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
 
@@ -74,6 +75,100 @@ describe("MotionTracker", () => {
 
     expect(exerciseHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "squat", stage: "down", reps: 0 }));
     expect(exerciseHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "squat", stage: "up", reps: 1 }));
+  });
+
+  it("registers plugins and calls lifecycle, pose, gesture, and exercise callbacks", async () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      ...createSquatDownLegs(),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createLandmarkTrackerMock(pose),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+        exercises: {
+          enabled: true,
+          names: ["squat"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const plugin: MotionPlugin = {
+      name: "observer",
+      onStart: vi.fn(),
+      onPose: vi.fn(),
+      onGesture: vi.fn(),
+      onExercise: vi.fn(),
+      onStop: vi.fn(),
+    };
+
+    tracker.registerPlugin(plugin);
+    await tracker.start();
+    raf.flushFrame(10);
+    tracker.stop();
+
+    expect(plugin.onStart).toHaveBeenCalledWith({ timestamp: 100 }, expect.any(Object));
+    expect(plugin.onPose).toHaveBeenCalledWith(pose, expect.any(Object));
+    expect(plugin.onGesture).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp" }), expect.any(Object));
+    expect(plugin.onExercise).toHaveBeenCalledWith(expect.objectContaining({ name: "squat" }), expect.any(Object));
+    expect(plugin.onStop).toHaveBeenCalledWith({ timestamp: 101 }, expect.any(Object));
+  });
+
+  it("unregisters plugins by name", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createLandmarkTrackerMock(createPose([])),
+    });
+    const plugin: MotionPlugin = {
+      name: "removed-plugin",
+      onPose: vi.fn(),
+    };
+
+    tracker.registerPlugin(plugin);
+    expect(tracker.unregisterPlugin("removed-plugin")).toBe(true);
+    await tracker.start();
+    raf.flushFrame(10);
+
+    expect(plugin.onPose).not.toHaveBeenCalled();
+  });
+
+  it("lets plugins emit safe gesture and exercise events", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createLandmarkTrackerMock(createPose([])),
+    });
+    const gestureHandler = vi.fn();
+    const exerciseHandler = vi.fn();
+
+    tracker.registerPlugin({
+      name: "emitter-plugin",
+      onPose: (_pose, api) => {
+        api.emitGesture({
+          name: "pluginGesture",
+          active: true,
+          confidence: 1,
+          timestamp: 10,
+        });
+        api.emitExercise({
+          name: "pluginExercise",
+          stage: "active",
+          reps: 1,
+          confidence: 1,
+          timestamp: 10,
+        });
+      },
+    });
+    tracker.on("gesture", gestureHandler);
+    tracker.on("exercise", exerciseHandler);
+
+    await tracker.start();
+    raf.flushFrame(10);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "pluginGesture", active: true }));
+    expect(exerciseHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "pluginExercise", reps: 1 }));
   });
 
 
