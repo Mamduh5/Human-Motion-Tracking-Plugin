@@ -2,6 +2,8 @@ export const packageName = "human-motion-tracking-plugin";
 
 export { CameraManager, VideoFrameProvider } from "./camera/index";
 export type { CameraSource, CameraSourceOptions, VideoFrame, VideoFrameCallback } from "./camera/index";
+export { MotionTracker } from "./core/index";
+export type { MotionTrackerDependencies, MotionTrackerState, MotionTrackerStatus, ResolvedMotionTrackerConfig } from "./core/index";
 export {
   detectArmsOpen,
   detectBothHandsUp,

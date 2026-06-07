@@ -26,9 +26,19 @@ export interface SmoothingConfig {
   windowSize?: number;
 }
 
+export interface PoseModelConfig {
+  modelAssetPath: string;
+  wasmAssetPath: string;
+  minPoseDetectionConfidence?: number;
+  minPosePresenceConfidence?: number;
+  minTrackingConfidence?: number;
+  numPoses?: number;
+}
+
 export interface MotionTrackerConfig {
   mode: TrackerMode;
   camera: CameraConfig;
+  pose?: PoseModelConfig;
   gestures: GestureConfig;
   exercises: ExerciseConfig;
   minConfidence: number;

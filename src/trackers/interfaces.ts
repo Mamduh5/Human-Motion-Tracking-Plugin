@@ -1,4 +1,5 @@
 import type { PoseResult } from "../types";
+import type { PoseModelConfig } from "../types/config";
 
 export interface MotionLandmarkTracker {
   initialize(): Promise<void>;
@@ -6,13 +7,6 @@ export interface MotionLandmarkTracker {
   dispose(): void;
 }
 
-export interface PoseTrackerConfig {
-  modelAssetPath: string;
-  wasmAssetPath: string;
-  minPoseDetectionConfidence?: number;
-  minPosePresenceConfidence?: number;
-  minTrackingConfidence?: number;
-  numPoses?: number;
-}
+export type PoseTrackerConfig = PoseModelConfig;
 
 export type TrackerProviderMode = "pose";
