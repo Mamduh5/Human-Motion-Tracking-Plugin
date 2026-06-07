@@ -1,1 +1,9 @@
-/nodemodule
+@"
+node_modules/
+dist/
+examples/*/node_modules/
+examples/*/dist/
+.vite/
+*.log
+.DS_Store
+"@ | Set-Content .gitignore
