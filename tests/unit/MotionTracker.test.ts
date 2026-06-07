@@ -347,6 +347,45 @@ describe("MotionTracker", () => {
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "bothHandsUp", active: true }));
   });
 
+  it("runs registered pose arm gesture detectors", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createArmGesturePose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: [
+            "armsUp",
+            "leftArmExtended",
+            "rightArmExtended",
+            "leftElbowBent",
+            "rightElbowBent",
+            "armsCrossed",
+            "handsOnHips",
+          ],
+          minConfidence: 0,
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const debugHandler = vi.fn();
+
+    tracker.on("gestureDebug", debugHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(debugHandler.mock.calls.map(([event]) => event.gesture.name)).toEqual([
+      "armsUp",
+      "leftArmExtended",
+      "rightArmExtended",
+      "leftElbowBent",
+      "rightElbowBent",
+      "armsCrossed",
+      "handsOnHips",
+    ]);
+  });
+
   it("emits active false after three stable inactive frames following an active gesture", async () => {
     const { tracker, raf } = createMotionTracker({
       landmarkTracker: createSequentialLandmarkTrackerMock([
@@ -833,6 +872,19 @@ function createHandsDownPose(): PoseResult {
     landmark("rightHip", 24, 0.65, 0.7),
     landmark("leftWrist", 15, 0.3, 0.6),
     landmark("rightWrist", 16, 0.7, 0.6),
+  ]);
+}
+
+function createArmGesturePose(): PoseResult {
+  return createPose([
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+    landmark("leftElbow", 13, 0.2, 0.4),
+    landmark("rightElbow", 14, 0.8, 0.4),
+    landmark("leftWrist", 15, 0.0, 0.4),
+    landmark("rightWrist", 16, 1.0, 0.4),
+    landmark("leftHip", 23, 0.35, 0.7),
+    landmark("rightHip", 24, 0.65, 0.7),
   ]);
 }
 

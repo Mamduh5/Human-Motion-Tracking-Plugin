@@ -6,10 +6,17 @@ export { MotionTracker } from "./core/index";
 export type { MotionTrackerDependencies, MotionTrackerState, MotionTrackerStatus, ResolvedMotionTrackerConfig } from "./core/index";
 export {
   SquatAnalyzer,
+  detectArmsCrossed,
   detectArmsOpen,
+  detectArmsUp,
   detectBothHandsUp,
+  detectHandsOnHips,
   detectHandUp,
+  detectLeftArmExtended,
+  detectLeftElbowBent,
   detectLeftHandUp,
+  detectRightArmExtended,
+  detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
 } from "./detectors/index";

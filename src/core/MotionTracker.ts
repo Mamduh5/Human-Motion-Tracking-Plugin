@@ -2,10 +2,17 @@ import type { CameraSource } from "../camera";
 import { CameraManager } from "../camera";
 import {
   SquatAnalyzer,
+  detectArmsCrossed,
   detectArmsOpen,
+  detectArmsUp,
   detectBothHandsUp,
+  detectHandsOnHips,
   detectHandUp,
+  detectLeftArmExtended,
+  detectLeftElbowBent,
   detectLeftHandUp,
+  detectRightArmExtended,
+  detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
 } from "../detectors";
@@ -48,6 +55,13 @@ const GESTURE_DETECTORS: Record<string, GestureDetector> = {
   rightHandUp: detectRightHandUp,
   bothHandsUp: detectBothHandsUp,
   armsOpen: detectArmsOpen,
+  armsUp: detectArmsUp,
+  leftArmExtended: detectLeftArmExtended,
+  rightArmExtended: detectRightArmExtended,
+  leftElbowBent: detectLeftElbowBent,
+  rightElbowBent: detectRightElbowBent,
+  armsCrossed: detectArmsCrossed,
+  handsOnHips: detectHandsOnHips,
   standing: detectStanding,
 };
 

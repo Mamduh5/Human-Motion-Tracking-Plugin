@@ -187,7 +187,7 @@ const tracker = new MotionTracker({
   ...config,
   gestures: {
     enabled: true,
-    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed"],
     minConfidence: 0.5,
     stability: {
       enabled: true,
@@ -226,7 +226,16 @@ Built-in gesture names include:
 - `rightHandUp`
 - `bothHandsUp`
 - `armsOpen`
+- `armsUp`
+- `leftArmExtended`
+- `rightArmExtended`
+- `leftElbowBent`
+- `rightElbowBent`
+- `armsCrossed`
+- `handsOnHips`
 - `standing`
+
+The arm-pose gestures use Pose Landmarker landmarks only: shoulder, elbow, wrist, index, pinky, thumb, and hip where needed. They do not enable MediaPipe hand tracking.
 
 ## Squat Analyzer Example
 
@@ -354,7 +363,7 @@ export function MotionTrackerPanel() {
       },
       gestures: {
         enabled: true,
-        names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+        names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed", "handsOnHips"],
         minConfidence: 0.5,
       },
       exercises: {
@@ -413,7 +422,7 @@ Then:
 
 1. Allow camera access when the browser prompts.
 2. Click Start.
-3. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, or `bothHandsUp`.
+3. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
 4. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
 5. Click Stop to stop the stream.
 

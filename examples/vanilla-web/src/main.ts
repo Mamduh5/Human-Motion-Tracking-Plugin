@@ -62,7 +62,19 @@ function createTrackerConfig(): MotionTrackerConfig {
     },
     gestures: {
       enabled: true,
-      names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+      names: [
+        "handUp",
+        "leftHandUp",
+        "rightHandUp",
+        "bothHandsUp",
+        "armsUp",
+        "leftArmExtended",
+        "rightArmExtended",
+        "leftElbowBent",
+        "rightElbowBent",
+        "armsCrossed",
+        "handsOnHips",
+      ],
       minConfidence: 0.5,
       stability: {
         enabled: stabilityToggle.checked,

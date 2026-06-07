@@ -78,6 +78,13 @@ Gesture detectors run after a valid pose is emitted when `config.gestures.enable
 - `rightHandUp`
 - `bothHandsUp`
 - `armsOpen`
+- `armsUp`
+- `leftArmExtended`
+- `rightArmExtended`
+- `leftElbowBent`
+- `rightElbowBent`
+- `armsCrossed`
+- `handsOnHips`
 - `standing`
 
 Exercise analyzers run when `config.exercises.enabled` is true. The built-in analyzer name is:
@@ -87,6 +94,7 @@ Exercise analyzers run when `config.exercises.enabled` is true. The built-in ana
 The squat analyzer tracks stage transitions and repetition count from visible hip, knee, and ankle landmarks.
 
 `leftHandUp`, `rightHandUp`, and `bothHandsUp` use anatomical left/right labels and require a mostly front-facing body. `handUp` is the side-view-safe option for workout positions where either visible wrist above its matching shoulder should count.
+The arm-pose gestures use Pose Landmarker body landmarks only. They do not require MediaPipe hand tracking.
 
 ### Event System
 

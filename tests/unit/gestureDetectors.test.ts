@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  detectArmsCrossed,
   detectArmsOpen,
+  detectArmsUp,
   detectBothHandsUp,
+  detectHandsOnHips,
   detectHandUp,
+  detectLeftArmExtended,
+  detectLeftElbowBent,
   detectLeftHandUp,
+  detectRightArmExtended,
+  detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
 } from "../../src/detectors";
@@ -690,6 +697,178 @@ describe("gesture detectors", () => {
     ]);
 
     expect(detectArmsOpen(pose)).toMatchObject({ name: "armsOpen", active: true, confidence: 1 });
+  });
+
+  it("detects arms up using visible pose hand landmarks", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftIndex", 19, 0.3, 0.2),
+      landmark("rightThumb", 22, 0.7, 0.2),
+    ]);
+
+    expect(detectArmsUp(pose)).toMatchObject({
+      name: "armsUp",
+      active: true,
+      metadata: {
+        reason: "active",
+        sideResults: {
+          left: expect.objectContaining({
+            active: true,
+            handTopLandmarkName: "leftIndex",
+            requiredVisibility: expect.objectContaining({
+              leftShoulder: 1,
+              leftIndex: 1,
+            }),
+          }),
+          right: expect.objectContaining({
+            active: true,
+            handTopLandmarkName: "rightThumb",
+            requiredVisibility: expect.objectContaining({
+              rightShoulder: 1,
+              rightThumb: 1,
+            }),
+          }),
+        },
+      },
+    });
+  });
+
+  it("detects left and right arm extension with elbow angles", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftElbow", 13, 0.2, 0.4),
+      landmark("leftWrist", 15, 0.0, 0.4),
+      landmark("rightElbow", 14, 0.8, 0.4),
+      landmark("rightWrist", 16, 1.0, 0.4),
+    ]);
+
+    expect(detectLeftArmExtended(pose)).toMatchObject({
+      name: "leftArmExtended",
+      active: true,
+      metadata: {
+        reason: "active",
+        side: "left",
+        angles: {
+          elbow: expect.closeTo(180),
+        },
+        requiredVisibility: expect.objectContaining({
+          leftShoulder: 1,
+          leftElbow: 1,
+          leftWrist: 1,
+        }),
+      },
+    });
+    expect(detectRightArmExtended(pose)).toMatchObject({
+      name: "rightArmExtended",
+      active: true,
+      metadata: {
+        reason: "active",
+        side: "right",
+        angles: {
+          elbow: expect.closeTo(180),
+        },
+      },
+    });
+  });
+
+  it("detects left and right elbow bent with elbow angles", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftElbow", 13, 0.2, 0.4),
+      landmark("leftWrist", 15, 0.2, 0.25),
+      landmark("rightElbow", 14, 0.8, 0.4),
+      landmark("rightWrist", 16, 0.8, 0.25),
+    ]);
+
+    expect(detectLeftElbowBent(pose)).toMatchObject({
+      name: "leftElbowBent",
+      active: true,
+      metadata: {
+        reason: "active",
+        angles: {
+          elbow: expect.closeTo(90),
+        },
+      },
+    });
+    expect(detectRightElbowBent(pose)).toMatchObject({
+      name: "rightElbowBent",
+      active: true,
+      metadata: {
+        reason: "active",
+        angles: {
+          elbow: expect.closeTo(90),
+        },
+      },
+    });
+  });
+
+  it("detects arms crossed from crossed pose hand points", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftWrist", 15, 0.78, 0.52),
+      landmark("rightWrist", 16, 0.22, 0.52),
+    ]);
+
+    expect(detectArmsCrossed(pose)).toMatchObject({
+      name: "armsCrossed",
+      active: true,
+      metadata: {
+        reason: "active",
+        leftHandLandmarkName: "leftWrist",
+        rightHandLandmarkName: "rightWrist",
+        requiredVisibility: expect.objectContaining({
+          leftShoulder: 1,
+          rightShoulder: 1,
+          leftWrist: 1,
+          rightWrist: 1,
+        }),
+      },
+    });
+  });
+
+  it("detects hands on hips with side results", () => {
+    const pose = createPose([
+      ...closeFrontFacingTorso(),
+      landmark("leftWrist", 15, 0.36, 0.69),
+      landmark("rightWrist", 16, 0.64, 0.69),
+    ]);
+
+    expect(detectHandsOnHips(pose)).toMatchObject({
+      name: "handsOnHips",
+      active: true,
+      metadata: {
+        reason: "active",
+        sideResults: {
+          left: expect.objectContaining({
+            active: true,
+            handTopLandmarkName: "leftWrist",
+          }),
+          right: expect.objectContaining({
+            active: true,
+            handTopLandmarkName: "rightWrist",
+          }),
+        },
+      },
+    });
+  });
+
+  it("does not activate pose arm gestures when required landmarks have low visibility", () => {
+    const pose = createPose([
+      ...closeUpShoulders(),
+      landmark("leftElbow", 13, 0.2, 0.4),
+      landmark("leftWrist", 15, 0.0, 0.4, 0.2),
+    ]);
+
+    expect(detectLeftArmExtended(pose)).toMatchObject({
+      name: "leftArmExtended",
+      active: false,
+      metadata: {
+        reason: "low-visibility",
+        requiredVisibility: expect.objectContaining({
+          leftWrist: 0.2,
+        }),
+      },
+    });
   });
 
   it("detects standing from shoulder, hip, knee, and ankle vertical ordering", () => {

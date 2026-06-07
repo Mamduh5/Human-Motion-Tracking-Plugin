@@ -4,7 +4,7 @@ A reusable TypeScript SDK for browser-based human pose tracking. It wraps browse
 
 Use it to build camera-powered motion features such as:
 
-- Hand-up, arms-open, and standing gesture detection.
+- Hand-up, arm-pose, arms-open, and standing gesture detection.
 - Squat rep and stage analysis.
 - Custom motion plugins that react to pose, gesture, and exercise events.
 - Vanilla browser or React applications that need live pose tracking.
@@ -44,7 +44,7 @@ const config: MotionTrackerConfig = {
   },
   gestures: {
     enabled: true,
-    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed"],
     minConfidence: 0.5,
     stability: {
       enabled: true,
@@ -133,10 +133,11 @@ Run the camera demo from the repository root:
 npm run dev:vanilla
 ```
 
-Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active `handUp`, `leftHandUp`, `rightHandUp`, and `bothHandsUp` gestures.
+Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active gestures including `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, `armsUp`, `armsCrossed`, and `handsOnHips`.
 The example defaults to 640x480 at 10 FPS with the low-power performance profile. It also shows detections/sec, average detection time, skipped frames, raw gesture debug, and a “Use gesture stability” checkbox.
 
 `leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
+The arm-pose gestures use Pose Landmarker body landmarks only. They do not require or enable MediaPipe hand tracking.
 
 ## Documentation
 
