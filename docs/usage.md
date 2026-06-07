@@ -73,8 +73,9 @@ const config: MotionTrackerConfig = {
   mode: "pose",
   camera: {
     facingMode: "user",
-    width: 1280,
-    height: 720,
+    width: 640,
+    height: 480,
+    frameRate: 15,
   },
   pose: {
     modelAssetPath:
@@ -93,6 +94,10 @@ const config: MotionTrackerConfig = {
   minConfidence: 0.5,
   smoothing: {
     enabled: false,
+  },
+  performance: {
+    profile: "balanced",
+    targetFps: 15,
   },
 };
 
@@ -118,6 +123,34 @@ tracker.stop();
 ```
 
 The tracker emits `pose` events only when a pose is detected and its confidence is at least `config.minConfidence`.
+
+## Performance / Low-Power Laptops
+
+Pose detection can heat up older laptops if it runs at full camera or display refresh rate. `MotionTracker` keeps `requestAnimationFrame` for responsive start/stop behavior, but throttles MediaPipe detection based on `performance.targetFps`.
+
+For weak devices:
+
+- Use a 640x480 camera stream.
+- Use `performance.targetFps` between 10 and 15.
+- Use `performance.profile: "low-power"` for 10 FPS or `"balanced"` for 15 FPS.
+- Avoid enabling pose, hands, and face tracking all at once on weak devices. This package currently tracks pose only, but holistic tracking will be heavier when enabled.
+- Run `npm run dev:vanilla` manually from a terminal only when you need the local camera demo. It starts a long-running Vite server.
+
+```ts
+const lowPowerConfig: MotionTrackerConfig = {
+  ...config,
+  camera: {
+    facingMode: "user",
+    width: 640,
+    height: 480,
+    frameRate: 10,
+  },
+  performance: {
+    profile: "low-power",
+    targetFps: 10,
+  },
+};
+```
 
 ## Using an Existing Video Element
 
@@ -302,8 +335,9 @@ export function MotionTrackerPanel() {
       mode: "pose",
       camera: {
         facingMode: "user",
-        width: 1280,
-        height: 720,
+        width: 640,
+        height: 480,
+        frameRate: 15,
       },
       pose: {
         modelAssetPath:
@@ -323,6 +357,9 @@ export function MotionTrackerPanel() {
       minConfidence: 0.5,
       smoothing: {
         enabled: false,
+      },
+      performance: {
+        profile: "balanced",
       },
     }),
     [],
@@ -358,6 +395,8 @@ Run the example from the repository root:
 npm run dev:vanilla
 ```
 
+Run this command manually when you want to use the camera demo; it starts a long-running Vite dev server.
+
 Open the local Vite URL printed by the command. In most setups this is `http://localhost:5173/`, but Vite may choose another port if that one is busy.
 
 Then:
@@ -369,6 +408,7 @@ Then:
 5. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
+By default it requests 640x480 at 15 FPS and uses the balanced performance profile. Enable Low power mode before clicking Start to request 10 FPS and use the low-power profile.
 
 ## Useful Scripts
 

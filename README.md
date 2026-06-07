@@ -33,8 +33,9 @@ const config: MotionTrackerConfig = {
   mode: "pose",
   camera: {
     facingMode: "user",
-    width: 1280,
-    height: 720,
+    width: 640,
+    height: 480,
+    frameRate: 15,
   },
   pose: {
     modelAssetPath:
@@ -54,6 +55,10 @@ const config: MotionTrackerConfig = {
   minConfidence: 0.5,
   smoothing: {
     enabled: false,
+  },
+  performance: {
+    profile: "balanced",
+    targetFps: 15,
   },
 };
 
@@ -77,6 +82,16 @@ await tracker.start();
 ```
 
 Call `tracker.stop()` when the view is closed or tracking is no longer needed.
+
+## Performance / Low-Power Laptops
+
+On older laptops, prefer a smaller camera stream and lower detection rate:
+
+- Use 640x480 camera constraints.
+- Use 10-15 `performance.targetFps`.
+- Use `performance.profile: "low-power"` for 10 FPS or `"balanced"` for 15 FPS.
+- Avoid enabling pose, hands, and face tracking all at once on weak devices.
+- Run `npm run dev:vanilla` manually only when you need the camera demo; it starts a long-running Vite server.
 
 ## React Adapter
 
@@ -113,6 +128,7 @@ npm run dev:vanilla
 ```
 
 Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active `handUp`, `leftHandUp`, `rightHandUp`, and `bothHandsUp` gestures.
+The example defaults to 640x480 at 15 FPS with the balanced performance profile and includes a low-power mode for 10 FPS.
 
 `leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
 

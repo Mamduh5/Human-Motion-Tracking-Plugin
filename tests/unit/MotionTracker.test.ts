@@ -1,12 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MotionTracker } from "../../src/core";
+import { MotionTracker, resolveMotionTrackerConfig } from "../../src/core";
 import type { CameraSource } from "../../src/camera";
 import type { MotionPlugin } from "../../src/plugins";
 import type { MotionLandmarkTracker } from "../../src/trackers";
 import type { Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
 
 describe("MotionTracker", () => {
+  it("defaults performance config to the balanced profile", () => {
+    const config = createConfig();
+
+    delete config.performance;
+
+    expect(resolveMotionTrackerConfig(config).performance).toEqual({
+      profile: "balanced",
+      targetFps: 15,
+      adaptive: false,
+    });
+  });
+
   it("starts camera and tracker, emits started, and schedules a frame", async () => {
     const { tracker, camera, landmarkTracker, raf } = createMotionTracker();
     const startedHandler = vi.fn();
@@ -353,6 +365,106 @@ describe("MotionTracker", () => {
     expect(errorHandler).toHaveBeenCalledWith({ message: "detect failed", cause: error });
     expect(camera.stop).toHaveBeenCalledOnce();
   });
+
+  it("does not call detect on every animation frame when targetFps is 15", async () => {
+    const { tracker, landmarkTracker, raf } = createMotionTracker({
+      config: {
+        performance: {
+          targetFps: 15,
+        },
+      },
+    });
+
+    await tracker.start();
+    flushFrames(raf, [0, 16, 32, 48, 67]);
+
+    expect(landmarkTracker.detect).toHaveBeenCalledTimes(2);
+    expect(tracker.getState()).toMatchObject({
+      lastFrameTimestamp: 67,
+      lastDetectionTimestamp: 67,
+      framesSkipped: 3,
+    });
+  });
+
+  it("detects more often at targetFps 30 than targetFps 10", async () => {
+    const lowPower = createMotionTracker({
+      config: {
+        performance: {
+          targetFps: 10,
+        },
+      },
+    });
+    const quality = createMotionTracker({
+      config: {
+        performance: {
+          targetFps: 30,
+        },
+      },
+    });
+    const frameTimestamps = [0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170];
+
+    await lowPower.tracker.start();
+    await quality.tracker.start();
+    flushFrames(lowPower.raf, frameTimestamps);
+    flushFrames(quality.raf, frameTimestamps);
+
+    expect(vi.mocked(quality.landmarkTracker.detect).mock.calls.length).toBeGreaterThan(
+      vi.mocked(lowPower.landmarkTracker.detect).mock.calls.length,
+    );
+  });
+
+  it("start and stop remain responsive when detection is throttled", async () => {
+    const { tracker, camera, landmarkTracker, raf } = createMotionTracker({
+      config: {
+        performance: {
+          targetFps: 10,
+        },
+      },
+    });
+
+    await tracker.start();
+    raf.flushFrame(0);
+    raf.flushFrame(16);
+    tracker.stop();
+    raf.flushFrame(32);
+
+    expect(landmarkTracker.detect).toHaveBeenCalledTimes(1);
+    expect(camera.stop).toHaveBeenCalledOnce();
+    expect(raf.cancelAnimationFrame).toHaveBeenCalledOnce();
+    expect(tracker.getState()).toMatchObject({
+      status: "stopped",
+      framesSkipped: 0,
+      detectionsPerSecond: 0,
+    });
+  });
+
+  it("keeps gesture stability working when detection is throttled", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([
+        createLeftHandUpPose(),
+        createLeftHandUpPose(),
+        createLeftHandUpPose(),
+      ]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+        performance: {
+          targetFps: 10,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    flushFrames(raf, [0, 16, 32, 48, 64, 100, 116, 132, 148, 164, 200]);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
 });
 
 interface CreateMotionTrackerOptions {
@@ -363,6 +475,7 @@ interface CreateMotionTrackerOptions {
 type PartialMotionTrackerConfig = Partial<Omit<MotionTrackerConfig, "gestures" | "exercises">> & {
   gestures?: Partial<MotionTrackerConfig["gestures"]>;
   exercises?: Partial<MotionTrackerConfig["exercises"]>;
+  performance?: Partial<NonNullable<MotionTrackerConfig["performance"]>>;
 };
 
 function createMotionTracker(options: CreateMotionTrackerOptions = {}) {
@@ -387,6 +500,8 @@ function createMotionTracker(options: CreateMotionTrackerOptions = {}) {
 }
 
 function createConfig(overrides: PartialMotionTrackerConfig = {}): MotionTrackerConfig {
+  const { gestures, exercises, performance, ...rest } = overrides;
+
   return {
     mode: "pose",
     camera: {},
@@ -396,17 +511,21 @@ function createConfig(overrides: PartialMotionTrackerConfig = {}): MotionTracker
     },
     gestures: {
       enabled: false,
-      ...overrides.gestures,
+      ...gestures,
     },
     exercises: {
       enabled: false,
-      ...overrides.exercises,
+      ...exercises,
     },
     minConfidence: 0,
     smoothing: {
       enabled: false,
     },
-    ...overrides,
+    performance: {
+      targetFps: 1000,
+      ...performance,
+    },
+    ...rest,
   };
 }
 
@@ -461,6 +580,12 @@ function createRafMock() {
       callback(timestamp);
     },
   };
+}
+
+function flushFrames(raf: ReturnType<typeof createRafMock>, timestamps: number[]): void {
+  for (const timestamp of timestamps) {
+    raf.flushFrame(timestamp);
+  }
 }
 
 function createPose(landmarks: Landmark[]): PoseResult {

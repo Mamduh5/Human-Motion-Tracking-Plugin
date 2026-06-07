@@ -11,7 +11,7 @@
 - Resolves and validates `MotionTrackerConfig`.
 - Starts and stops the camera source.
 - Initializes and disposes the landmark tracker.
-- Runs pose detection on `requestAnimationFrame`.
+- Schedules the frame loop with `requestAnimationFrame` and throttles pose detection by configured target FPS.
 - Emits `pose`, `gesture`, `exercise`, `started`, `stopped`, and `error` events.
 - Dispatches events to registered plugins.
 
@@ -131,12 +131,13 @@ The live tracking flow is:
 4. `PoseTracker.initialize()` loads MediaPipe wasm and model assets.
 5. `CameraManager.start()` requests camera permission and starts the video stream.
 6. `MotionTracker` emits `started`.
-7. Each animation frame calls `landmarkTracker.detect(video, timestamp)`.
-8. A valid pose emits `pose`.
-9. Enabled gesture detectors emit `gesture`.
-10. Enabled exercise analyzers emit `exercise`.
-11. Plugins receive each relevant event and may emit derived events.
-12. App calls `stop()`, which cancels the frame loop, stops camera tracks, disposes MediaPipe, and emits `stopped`.
+7. Each animation frame updates loop state and checks the performance throttle.
+8. When enough time has passed for `performance.targetFps`, `landmarkTracker.detect(video, timestamp)` runs.
+9. A valid pose emits `pose`.
+10. Enabled gesture detectors emit `gesture`.
+11. Enabled exercise analyzers emit `exercise`.
+12. Plugins receive each relevant event and may emit derived events.
+13. App calls `stop()`, which cancels the frame loop, stops camera tracks, disposes MediaPipe, and emits `stopped`.
 
 ## Configuration Shape
 
@@ -174,10 +175,16 @@ interface MotionTrackerConfig {
     factor?: number;
     windowSize?: number;
   };
+  performance?: {
+    targetFps?: number;
+    profile?: "low-power" | "balanced" | "quality";
+    adaptive?: boolean;
+  };
 }
 ```
 
 For `mode: "pose"`, both `pose.modelAssetPath` and `pose.wasmAssetPath` are required.
+Performance defaults to the balanced profile at 15 FPS. The low-power profile defaults to 10 FPS, and the quality profile defaults to 30 FPS.
 
 ## Browser-Only Camera Requirements
 

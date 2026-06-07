@@ -55,12 +55,19 @@ export class MotionTracker {
   private readonly requestFrame: RequestAnimationFrame;
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
+  private readonly detectionIntervalMs: number;
   private readonly pluginManager: PluginManager;
   private readonly gestureStabilityFilter = new GestureStabilityFilter();
   private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
   private videoElement?: HTMLVideoElement;
+  private lastDetectionTimestamp?: number;
+  private averageDetectionMs?: number;
+  private framesSkipped = 0;
+  private detectionCount = 0;
+  private detectionRateWindowStartedAt?: number;
+  private detectionsPerSecond = 0;
 
   constructor(config: MotionTrackerConfig, dependencies: MotionTrackerDependencies = {}) {
     this.config = resolveMotionTrackerConfig(config);
@@ -74,6 +81,7 @@ export class MotionTracker {
     this.requestFrame = dependencies.requestAnimationFrame ?? getRequestAnimationFrame();
     this.cancelFrame = dependencies.cancelAnimationFrame ?? getCancelAnimationFrame();
     this.now = dependencies.now ?? getTimestamp;
+    this.detectionIntervalMs = 1000 / this.config.performance.targetFps;
     this.pluginManager = new PluginManager(this.createPluginApi());
   }
 
@@ -82,9 +90,11 @@ export class MotionTracker {
       return;
     }
 
+    this.resetPerformanceCounters();
     this.state = {
       status: "starting",
       startedAt: this.now(),
+      ...this.getPerformanceState(),
     };
     this.gestureStabilityFilter.reset();
     this.resetExerciseAnalyzers();
@@ -114,14 +124,15 @@ export class MotionTracker {
       this.animationFrameId = undefined;
     }
 
+    const stoppedAt = this.now();
     this.camera.stop();
     this.landmarkTracker.dispose();
-
-    const stoppedAt = this.now();
+    this.resetPerformanceCounters();
     this.state = {
       ...this.state,
       status: "stopped",
       stoppedAt,
+      ...this.getPerformanceState(),
     };
     const stoppedEvent = { timestamp: stoppedAt };
     this.events.emit("stopped", stoppedEvent);
@@ -171,12 +182,25 @@ export class MotionTracker {
       return;
     }
 
-    try {
-      const pose = this.landmarkTracker.detect(this.videoElement, timestamp);
+    this.state = {
+      ...this.state,
+      lastFrameTimestamp: timestamp,
+    };
+
+    if (!this.shouldRunDetection(timestamp)) {
+      this.framesSkipped += 1;
       this.state = {
         ...this.state,
-        lastFrameTimestamp: timestamp,
+        ...this.getPerformanceState(),
       };
+      this.scheduleNextFrameIfRunning();
+      return;
+    }
+
+    try {
+      const detectionStartedAt = getTimestamp();
+      const pose = this.landmarkTracker.detect(this.videoElement, timestamp);
+      this.updateDetectionPerformance(timestamp, Math.max(0, getTimestamp() - detectionStartedAt));
 
       if (pose && pose.confidence >= this.config.minConfidence) {
         this.events.emit("pose", pose);
@@ -185,12 +209,61 @@ export class MotionTracker {
         this.emitExercises(pose);
       }
 
-      if (this.state.status === "running") {
-        this.scheduleNextFrame();
-      }
+      this.scheduleNextFrameIfRunning();
     } catch (error) {
       this.handleError(error);
       this.stop();
+    }
+  }
+
+  private shouldRunDetection(timestamp: number): boolean {
+    return this.lastDetectionTimestamp === undefined || timestamp - this.lastDetectionTimestamp >= this.detectionIntervalMs;
+  }
+
+  private updateDetectionPerformance(timestamp: number, detectionMs: number): void {
+    this.lastDetectionTimestamp = timestamp;
+    this.averageDetectionMs =
+      this.averageDetectionMs === undefined ? detectionMs : this.averageDetectionMs * 0.8 + detectionMs * 0.2;
+    this.detectionCount += 1;
+
+    if (this.detectionRateWindowStartedAt === undefined) {
+      this.detectionRateWindowStartedAt = timestamp;
+      this.detectionsPerSecond = this.detectionCount;
+    } else {
+      const elapsedSeconds = (timestamp - this.detectionRateWindowStartedAt) / 1000;
+      this.detectionsPerSecond = elapsedSeconds > 0 ? this.detectionCount / elapsedSeconds : this.detectionCount;
+    }
+
+    this.state = {
+      ...this.state,
+      ...this.getPerformanceState(),
+    };
+  }
+
+  private resetPerformanceCounters(): void {
+    this.lastDetectionTimestamp = undefined;
+    this.averageDetectionMs = undefined;
+    this.framesSkipped = 0;
+    this.detectionCount = 0;
+    this.detectionRateWindowStartedAt = undefined;
+    this.detectionsPerSecond = 0;
+  }
+
+  private getPerformanceState(): Pick<
+    MotionTrackerState,
+    "lastDetectionTimestamp" | "averageDetectionMs" | "framesSkipped" | "detectionsPerSecond"
+  > {
+    return {
+      lastDetectionTimestamp: this.lastDetectionTimestamp,
+      averageDetectionMs: this.averageDetectionMs,
+      framesSkipped: this.framesSkipped,
+      detectionsPerSecond: this.detectionsPerSecond,
+    };
+  }
+
+  private scheduleNextFrameIfRunning(): void {
+    if (this.state.status === "running") {
+      this.scheduleNextFrame();
     }
   }
 

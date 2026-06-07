@@ -4,6 +4,8 @@ export type {
   ExerciseConfig,
   GestureConfig,
   MotionTrackerConfig,
+  PerformanceConfig,
+  PerformanceProfile,
   PoseModelConfig,
   SmoothingConfig,
 } from "./config";

@@ -26,6 +26,14 @@ export interface SmoothingConfig {
   windowSize?: number;
 }
 
+export type PerformanceProfile = "low-power" | "balanced" | "quality";
+
+export interface PerformanceConfig {
+  targetFps?: number;
+  profile?: PerformanceProfile;
+  adaptive?: boolean;
+}
+
 export interface PoseModelConfig {
   modelAssetPath: string;
   wasmAssetPath: string;
@@ -43,4 +51,5 @@ export interface MotionTrackerConfig {
   exercises: ExerciseConfig;
   minConfidence: number;
   smoothing: SmoothingConfig;
+  performance?: PerformanceConfig;
 }

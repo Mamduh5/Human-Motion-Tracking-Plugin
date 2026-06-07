@@ -13,10 +13,21 @@ const startButton = document.querySelector<HTMLButtonElement>("#startButton");
 const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const gesturesElement = document.querySelector<HTMLElement>("#gestures");
+const lowPowerToggle = document.querySelector<HTMLInputElement>("#lowPowerToggle");
 const debugToggle = document.querySelector<HTMLInputElement>("#debugToggle");
 const gestureDebugElement = document.querySelector<HTMLElement>("#gestureDebug");
 
-if (!video || !overlay || !startButton || !stopButton || !statusElement || !gesturesElement || !debugToggle || !gestureDebugElement) {
+if (
+  !video ||
+  !overlay ||
+  !startButton ||
+  !stopButton ||
+  !statusElement ||
+  !gesturesElement ||
+  !lowPowerToggle ||
+  !debugToggle ||
+  !gestureDebugElement
+) {
   throw new Error("Example UI failed to initialize.");
 }
 
@@ -24,34 +35,43 @@ const activeGestures = new Map<string, GestureResult>();
 const gestureDebug = new Map<string, GestureResult>();
 let tracker: MotionTracker | undefined;
 
-const config: MotionTrackerConfig = {
-  mode: "pose",
-  camera: {
-    facingMode: "user",
-    width: 1280,
-    height: 720,
-  },
-  pose: {
-    modelAssetPath:
-      "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-    wasmAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
-    minPoseDetectionConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  },
-  gestures: {
-    enabled: true,
-    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+function createTrackerConfig(): MotionTrackerConfig {
+  const lowPower = lowPowerToggle.checked;
+
+  return {
+    mode: "pose",
+    camera: {
+      facingMode: "user",
+      width: 640,
+      height: 480,
+      frameRate: lowPower ? 10 : 15,
+    },
+    pose: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+      wasmAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+      minPoseDetectionConfidence: 0.5,
+      minPosePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    },
+    gestures: {
+      enabled: true,
+      names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+      minConfidence: 0.5,
+    },
+    exercises: {
+      enabled: false,
+    },
     minConfidence: 0.5,
-  },
-  exercises: {
-    enabled: false,
-  },
-  minConfidence: 0.5,
-  smoothing: {
-    enabled: false,
-  },
-};
+    smoothing: {
+      enabled: false,
+    },
+    performance: {
+      profile: lowPower ? "low-power" : "balanced",
+      targetFps: lowPower ? 10 : 15,
+    },
+  };
+}
 
 startButton.addEventListener("click", () => {
   void startTracking();
@@ -71,6 +91,7 @@ async function startTracking(): Promise<void> {
   gestureDebug.clear();
   updateGestureText();
   updateGestureDebug();
+  const config = createTrackerConfig();
 
   tracker = new MotionTracker(config, {
     camera: new CameraManager({
