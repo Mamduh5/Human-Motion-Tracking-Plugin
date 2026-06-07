@@ -1,3 +1,5 @@
+import type { GesturePrecisionProfile, GestureThresholds } from "../detectors/gestures/GestureThresholds";
+
 export type TrackerMode = "pose" | "holistic";
 
 export interface CameraConfig {
@@ -12,6 +14,8 @@ export interface GestureConfig {
   enabled: boolean;
   names?: string[];
   minConfidence?: number;
+  precision?: GesturePrecisionProfile;
+  thresholds?: Partial<GestureThresholds>;
   stability?: GestureStabilityConfig;
 }
 

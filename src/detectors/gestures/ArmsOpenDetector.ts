@@ -1,11 +1,11 @@
 import { getLandmarkByName } from "../../normalizers";
 import type { GestureResult, Landmark, PoseResult } from "../../types";
 import { averageConfidence, distance2D, isLandmarkVisible } from "../../utils";
+import { resolveGestureThresholds, type GestureThresholds } from "./GestureThresholds";
 
-const MIN_VISIBILITY = 0.5;
-const MAX_WRIST_SHOULDER_Y_DELTA_RATIO = 0.4;
+const DEFAULT_THRESHOLDS = resolveGestureThresholds();
 
-export function detectArmsOpen(pose: PoseResult): GestureResult {
+export function detectArmsOpen(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
   const leftShoulder = getLandmarkByName(pose.landmarks, "leftShoulder");
   const rightShoulder = getLandmarkByName(pose.landmarks, "rightShoulder");
   const leftWrist = getLandmarkByName(pose.landmarks, "leftWrist");
@@ -18,27 +18,39 @@ export function detectArmsOpen(pose: PoseResult): GestureResult {
   const landmarks = [leftShoulder, rightShoulder, leftWrist, rightWrist];
   const shoulderWidth = distance2D(leftShoulder, rightShoulder);
 
-  if (shoulderWidth === 0 || !landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY))) {
-    return createGestureResult(pose.timestamp, false, averageConfidence(landmarks));
+  if (shoulderWidth === 0 || !landmarks.every((landmark) => isLandmarkVisible(landmark, thresholds.minVisibility))) {
+    return createGestureResult(pose.timestamp, false, averageConfidence(landmarks), {
+      reason: "low-visibility",
+      requiredVisibility: getRequiredVisibility({ leftShoulder, rightShoulder, leftWrist, rightWrist }),
+    });
   }
 
-  const leftExtended = leftWrist.x < leftShoulder.x;
-  const rightExtended = rightWrist.x > rightShoulder.x;
-  const leftLevel = isNearShoulderHeight(leftWrist, leftShoulder, shoulderWidth);
-  const rightLevel = isNearShoulderHeight(rightWrist, rightShoulder, shoulderWidth);
+  const leftExtended = leftWrist.x < leftShoulder.x - shoulderWidth * thresholds.armsOpenXMargin;
+  const rightExtended = rightWrist.x > rightShoulder.x + shoulderWidth * thresholds.armsOpenXMargin;
+  const leftLevel = isNearShoulderHeight(leftWrist, leftShoulder, shoulderWidth, thresholds);
+  const rightLevel = isNearShoulderHeight(rightWrist, rightShoulder, shoulderWidth, thresholds);
+  const active = leftExtended && rightExtended && leftLevel && rightLevel;
 
   return createGestureResult(
     pose.timestamp,
-    leftExtended && rightExtended && leftLevel && rightLevel,
+    active,
     averageConfidence(landmarks),
     {
+      reason: active ? "active" : "not-extended",
       shoulderWidth,
+      requiredVisibility: getRequiredVisibility({ leftShoulder, rightShoulder, leftWrist, rightWrist }),
     },
   );
 }
 
-function isNearShoulderHeight(wrist: Landmark, shoulder: Landmark, shoulderWidth: number): boolean {
-  return Math.abs(wrist.y - shoulder.y) <= shoulderWidth * MAX_WRIST_SHOULDER_Y_DELTA_RATIO;
+function isNearShoulderHeight(wrist: Landmark, shoulder: Landmark, shoulderWidth: number, thresholds: GestureThresholds): boolean {
+  return Math.abs(wrist.y - shoulder.y) <= shoulderWidth * thresholds.armsOpenYOffset;
+}
+
+function getRequiredVisibility(requiredLandmarks: Record<string, Landmark | undefined>): Record<string, number | undefined> {
+  return Object.fromEntries(
+    Object.entries(requiredLandmarks).map(([name, landmark]) => [name, landmark?.visibility]),
+  ) as Record<string, number | undefined>;
 }
 
 function createGestureResult(

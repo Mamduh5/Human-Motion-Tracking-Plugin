@@ -19,8 +19,10 @@ export {
   detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
+  GESTURE_PRECISION_PRESETS,
+  resolveGestureThresholds,
 } from "./detectors/index";
-export type { SquatAnalyzerOptions, SquatStage } from "./detectors/index";
+export type { GesturePrecisionProfile, GestureThresholdConfig, GestureThresholds, SquatAnalyzerOptions, SquatStage } from "./detectors/index";
 export { EventEmitter, MotionEvents } from "./events/index";
 export type { EventHandler, EventMap, MotionEventName, MotionEventPayload } from "./events/index";
 export {

@@ -1,10 +1,9 @@
 import { getLandmarkByName } from "../../normalizers";
 import type { GestureResult, Landmark, PoseResult } from "../../types";
 import { averageConfidence, distance2D, isLandmarkVisible } from "../../utils";
+import { resolveGestureThresholds, type GestureThresholds } from "./GestureThresholds";
 
-const MIN_VISIBILITY = 0.5;
-const HAND_UP_Y_MARGIN = 0.03;
-const MIN_FRONT_FACING_SCORE = 0.35;
+const DEFAULT_THRESHOLDS = resolveGestureThresholds();
 
 type HandSide = "left" | "right";
 type HandLandmarkKind = "wrist" | "index" | "pinky" | "thumb";
@@ -18,6 +17,7 @@ interface HandUpMetadataOptions {
   side?: HandSide;
   sideResult?: HandSideEvaluation;
   sideResults?: Partial<Record<HandSide, HandSideEvaluation>>;
+  thresholds: GestureThresholds;
   shoulderWidth?: number;
   hipWidth?: number;
   torsoWidth?: number;
@@ -66,17 +66,13 @@ interface TorsoLandmarks {
   rightHip?: Landmark;
 }
 
-export function detectLeftHandUp(pose: PoseResult): GestureResult {
-  return detectAnatomicalHandUp(pose, "left");
+export function detectRightHandUp(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectAnatomicalHandUp(pose, "right", thresholds);
 }
 
-export function detectRightHandUp(pose: PoseResult): GestureResult {
-  return detectAnatomicalHandUp(pose, "right");
-}
-
-export function detectHandUp(pose: PoseResult): GestureResult {
-  const left = evaluateHandSideUp(pose, "left");
-  const right = evaluateHandSideUp(pose, "right");
+export function detectHandUp(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  const left = evaluateHandSideUp(pose, "left", thresholds);
+  const right = evaluateHandSideUp(pose, "right", thresholds);
   const activeSideCandidates = [left, right].filter((result) => result.active).map((result) => result.side);
   const active = activeSideCandidates.length > 0;
   const reason: HandUpReason = active ? "active" : getCombinedInactiveReason([left, right]);
@@ -92,14 +88,15 @@ export function detectHandUp(pose: PoseResult): GestureResult {
     createHandUpMetadata({
       reason,
       sideResults: { left, right },
+      thresholds,
     }),
   );
 }
 
-export function detectBothHandsUp(pose: PoseResult): GestureResult {
-  const left = evaluateHandSideUp(pose, "left");
-  const right = evaluateHandSideUp(pose, "right");
-  const orientationEvaluation = evaluateBodyOrientation(pose);
+export function detectBothHandsUp(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  const left = evaluateHandSideUp(pose, "left", thresholds);
+  const right = evaluateHandSideUp(pose, "right", thresholds);
+  const orientationEvaluation = evaluateBodyOrientation(pose, thresholds);
   const blockedByOrientation = orientationEvaluation.orientation === "side" && orientationEvaluation.inactiveReason === "not-front-facing";
   const active = !blockedByOrientation && left.active && right.active;
   const reason: HandUpReason = blockedByOrientation
@@ -124,14 +121,19 @@ export function detectBothHandsUp(pose: PoseResult): GestureResult {
       torsoHeight: orientationEvaluation.torsoHeight,
       frontFacingScore: orientationEvaluation.frontFacingScore,
       frontFacingThreshold: orientationEvaluation.frontFacingThreshold,
+      thresholds,
     }),
   );
 }
 
-function detectAnatomicalHandUp(pose: PoseResult, side: HandSide): GestureResult {
+export function detectLeftHandUp(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectAnatomicalHandUp(pose, "left", thresholds);
+}
+
+function detectAnatomicalHandUp(pose: PoseResult, side: HandSide, thresholds: GestureThresholds): GestureResult {
   const name = side === "left" ? "leftHandUp" : "rightHandUp";
-  const sideResult = evaluateHandSideUp(pose, side);
-  const orientationEvaluation = evaluateBodyOrientation(pose);
+  const sideResult = evaluateHandSideUp(pose, side, thresholds);
+  const orientationEvaluation = evaluateBodyOrientation(pose, thresholds);
   const blockedByOrientation = orientationEvaluation.orientation === "side" && orientationEvaluation.inactiveReason === "not-front-facing";
   const active = !blockedByOrientation && sideResult.active;
   const reason: HandUpReason = blockedByOrientation ? "not-front-facing" : sideResult.reason;
@@ -152,20 +154,21 @@ function detectAnatomicalHandUp(pose: PoseResult, side: HandSide): GestureResult
       torsoHeight: orientationEvaluation.torsoHeight,
       frontFacingScore: orientationEvaluation.frontFacingScore,
       frontFacingThreshold: orientationEvaluation.frontFacingThreshold,
+      thresholds,
     }),
   );
 }
 
-function evaluateHandSideUp(pose: PoseResult, side: HandSide): HandSideEvaluation {
+function evaluateHandSideUp(pose: PoseResult, side: HandSide, thresholds: GestureThresholds): HandSideEvaluation {
   const landmarks = getHandSideLandmarks(pose, side);
   const handLandmarks = getHandLandmarkEntries(landmarks);
-  const visibleHandLandmarks = handLandmarks.filter(([, landmark]) => isLandmarkVisible(landmark, MIN_VISIBILITY));
+  const visibleHandLandmarks = handLandmarks.filter(([, landmark]) => isLandmarkVisible(landmark, thresholds.minVisibility));
 
   if (!landmarks.shoulder) {
     return createHandSideEvaluation(landmarks, "missing-landmarks", false, visibleHandLandmarks);
   }
 
-  if (!isLandmarkVisible(landmarks.shoulder, MIN_VISIBILITY)) {
+  if (!isLandmarkVisible(landmarks.shoulder, thresholds.minVisibility)) {
     return createHandSideEvaluation(landmarks, "low-visibility", false, visibleHandLandmarks);
   }
 
@@ -183,7 +186,7 @@ function evaluateHandSideUp(pose: PoseResult, side: HandSide): HandSideEvaluatio
   const handTopY = handTopLandmark.y;
   const shoulderY = landmarks.shoulder.y;
   const yDelta = shoulderY - handTopY;
-  const active = handTopY < shoulderY - HAND_UP_Y_MARGIN;
+  const active = handTopY < shoulderY - thresholds.handUpYMargin;
 
   return {
     side,
@@ -261,27 +264,27 @@ function averageSideConfidence(results: HandSideEvaluation[]): number {
   return confidences.length > 0 ? confidences.reduce((sum, confidence) => sum + confidence, 0) / confidences.length : 0;
 }
 
-function evaluateBodyOrientation(pose: PoseResult): BodyOrientationEvaluation {
+function evaluateBodyOrientation(pose: PoseResult, thresholds: GestureThresholds): BodyOrientationEvaluation {
   const torso = getTorsoLandmarks(pose);
 
   if (!torso.leftShoulder || !torso.rightShoulder) {
-    return { orientation: "unknown", frontFacingThreshold: MIN_FRONT_FACING_SCORE };
+    return { orientation: "unknown", frontFacingThreshold: thresholds.frontFacingScore };
   }
 
   const shoulderWidth = Math.abs(torso.leftShoulder.x - torso.rightShoulder.x);
 
   if (
-    !isLandmarkVisible(torso.leftShoulder, MIN_VISIBILITY) ||
-    !isLandmarkVisible(torso.rightShoulder, MIN_VISIBILITY) ||
+    !isLandmarkVisible(torso.leftShoulder, thresholds.minVisibility) ||
+    !isLandmarkVisible(torso.rightShoulder, thresholds.minVisibility) ||
     !torso.leftHip ||
     !torso.rightHip ||
-    !isLandmarkVisible(torso.leftHip, MIN_VISIBILITY) ||
-    !isLandmarkVisible(torso.rightHip, MIN_VISIBILITY)
+    !isLandmarkVisible(torso.leftHip, thresholds.minVisibility) ||
+    !isLandmarkVisible(torso.rightHip, thresholds.minVisibility)
   ) {
     return {
       orientation: "unknown",
       shoulderWidth,
-      frontFacingThreshold: MIN_FRONT_FACING_SCORE,
+      frontFacingThreshold: thresholds.frontFacingScore,
     };
   }
 
@@ -292,7 +295,7 @@ function evaluateBodyOrientation(pose: PoseResult): BodyOrientationEvaluation {
   const torsoHeight = distance2D(shoulderCenter, hipCenter);
   const frontFacingScore = torsoHeight > 0 ? torsoWidth / torsoHeight : 0;
 
-  if (frontFacingScore < MIN_FRONT_FACING_SCORE) {
+  if (frontFacingScore < thresholds.frontFacingScore) {
     return {
       orientation: "side",
       inactiveReason: "not-front-facing",
@@ -301,7 +304,7 @@ function evaluateBodyOrientation(pose: PoseResult): BodyOrientationEvaluation {
       torsoWidth,
       torsoHeight,
       frontFacingScore,
-      frontFacingThreshold: MIN_FRONT_FACING_SCORE,
+      frontFacingThreshold: thresholds.frontFacingScore,
     };
   }
 
@@ -312,7 +315,7 @@ function evaluateBodyOrientation(pose: PoseResult): BodyOrientationEvaluation {
     torsoWidth,
     torsoHeight,
     frontFacingScore,
-    frontFacingThreshold: MIN_FRONT_FACING_SCORE,
+    frontFacingThreshold: thresholds.frontFacingScore,
   };
 }
 
@@ -350,7 +353,7 @@ function createGestureResult(
 
 function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, unknown> {
   const sideResult = options.sideResult;
-  const sideResults = options.sideResults ? serializeSideResults(options.sideResults) : undefined;
+  const sideResults = options.sideResults ? serializeSideResults(options.sideResults, options.thresholds) : undefined;
 
   return {
     reason: options.reason,
@@ -366,7 +369,7 @@ function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, un
     handTopLandmarkName: sideResult?.handTopLandmarkName,
     shoulderY: sideResult?.shoulderY,
     yDelta: sideResult?.yDelta,
-    yMargin: HAND_UP_Y_MARGIN,
+    yMargin: options.thresholds.handUpYMargin,
     visibleHandLandmarks: sideResult?.visibleHandLandmarks,
     wristY: sideResult?.landmarks.wrist?.y,
     requiredVisibility: sideResult ? getRequiredVisibility(getRequiredLandmarks(sideResult.landmarks)) : getMergedRequiredVisibility(options.sideResults),
@@ -376,8 +379,8 @@ function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, un
           .filter((result): result is HandSideEvaluation => Boolean(result?.active))
           .map((result) => result.side)
       : undefined,
-    leftVisible: options.sideResults?.left ? isSideVisible(options.sideResults.left) : undefined,
-    rightVisible: options.sideResults?.right ? isSideVisible(options.sideResults.right) : undefined,
+    leftVisible: options.sideResults?.left ? isSideVisible(options.sideResults.left, options.thresholds) : undefined,
+    rightVisible: options.sideResults?.right ? isSideVisible(options.sideResults.right, options.thresholds) : undefined,
     leftWristY: options.sideResults?.left?.landmarks.wrist?.y,
     leftShoulderY: options.sideResults?.left?.shoulderY,
     rightWristY: options.sideResults?.right?.landmarks.wrist?.y,
@@ -385,7 +388,10 @@ function createHandUpMetadata(options: HandUpMetadataOptions): Record<string, un
   };
 }
 
-function serializeSideResults(sideResults: Partial<Record<HandSide, HandSideEvaluation>>): Record<string, unknown> {
+function serializeSideResults(
+  sideResults: Partial<Record<HandSide, HandSideEvaluation>>,
+  thresholds: GestureThresholds,
+): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(sideResults).map(([side, result]) => {
       return [
@@ -400,7 +406,7 @@ function serializeSideResults(sideResults: Partial<Record<HandSide, HandSideEval
               handTopLandmarkName: result.handTopLandmarkName,
               shoulderY: result.shoulderY,
               yDelta: result.yDelta,
-              yMargin: HAND_UP_Y_MARGIN,
+              yMargin: thresholds.handUpYMargin,
               visibleHandLandmarks: result.visibleHandLandmarks,
               requiredVisibility: getRequiredVisibility(getRequiredLandmarks(result.landmarks)),
             }
@@ -433,8 +439,8 @@ function getMergedRequiredVisibility(sideResults?: Partial<Record<HandSide, Hand
   ) as Record<string, number | undefined>;
 }
 
-function isSideVisible(result: HandSideEvaluation): boolean {
-  return Boolean(result.landmarks.shoulder && isLandmarkVisible(result.landmarks.shoulder, MIN_VISIBILITY)) && result.visibleHandLandmarks.length > 0;
+function isSideVisible(result: HandSideEvaluation, thresholds: GestureThresholds): boolean {
+  return Boolean(result.landmarks.shoulder && isLandmarkVisible(result.landmarks.shoulder, thresholds.minVisibility)) && result.visibleHandLandmarks.length > 0;
 }
 
 function getRequiredVisibility(requiredLandmarks: Record<string, Landmark | undefined>): Record<string, number | undefined> {

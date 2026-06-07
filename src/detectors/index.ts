@@ -14,4 +14,7 @@ export {
   detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
+  GESTURE_PRECISION_PRESETS,
+  resolveGestureThresholds,
 } from "./gestures";
+export type { GesturePrecisionProfile, GestureThresholdConfig, GestureThresholds } from "./gestures";

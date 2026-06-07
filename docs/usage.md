@@ -155,6 +155,32 @@ const lowPowerConfig: MotionTrackerConfig = {
 };
 ```
 
+## Gesture Precision
+
+Gesture precision lets you tune detector sensitivity for camera quality, distance, lighting, and false-positive tolerance:
+
+- `loose`: more sensitive. Use it when close-up webcam gestures are real but not consistently detected.
+- `balanced`: default SDK behavior.
+- `strict`: requires clearer poses and reduces false positives.
+
+```ts
+const config: MotionTrackerConfig = {
+  ...baseConfig,
+  gestures: {
+    enabled: true,
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp"],
+    minConfidence: 0.5,
+    precision: "loose",
+    thresholds: {
+      handUpYMargin: 0.02,
+      minVisibility: 0.4,
+    },
+  },
+};
+```
+
+Use `thresholds` for targeted overrides after choosing a preset. For example, lowering `handUpYMargin` makes hand-up gestures activate with less vertical distance between hand and shoulder.
+
 ## Using an Existing Video Element
 
 If your UI already owns the preview element, pass a `CameraManager` dependency with that element:
@@ -189,6 +215,7 @@ const tracker = new MotionTracker({
     enabled: true,
     names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed"],
     minConfidence: 0.5,
+    precision: "balanced",
     stability: {
       enabled: true,
       activeFrames: 3,
@@ -365,6 +392,7 @@ export function MotionTrackerPanel() {
         enabled: true,
         names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed", "handsOnHips"],
         minConfidence: 0.5,
+        precision: "balanced",
       },
       exercises: {
         enabled: true,
@@ -427,7 +455,7 @@ Then:
 5. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
-By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering.
+By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering.
 
 ## Useful Scripts
 

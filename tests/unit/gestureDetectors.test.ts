@@ -14,6 +14,7 @@ import {
   detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
+  resolveGestureThresholds,
 } from "../../src/detectors";
 import type { Landmark, PoseResult } from "../../src/types";
 
@@ -675,6 +676,58 @@ describe("gesture detectors", () => {
       name: "leftHandUp",
       active: false,
       metadata: { reason: "not-high-enough" },
+    });
+  });
+
+  it("uses balanced precision by default for standalone hand-up detectors", () => {
+    const pose = createPose([...closeFrontFacingTorso(), landmark("leftWrist", 15, 0.3, 0.375)]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: {
+        reason: "not-high-enough",
+        yMargin: 0.03,
+      },
+    });
+  });
+
+  it("loose handUp activates with a smaller yDelta than balanced", () => {
+    const pose = createPose([...closeFrontFacingTorso(), landmark("leftWrist", 15, 0.3, 0.375)]);
+    const loose = resolveGestureThresholds({ precision: "loose" });
+    const balanced = resolveGestureThresholds({ precision: "balanced" });
+
+    expect(detectLeftHandUp(pose, balanced)).toMatchObject({ active: false });
+    expect(detectLeftHandUp(pose, loose)).toMatchObject({
+      active: true,
+      metadata: { yMargin: 0.015 },
+    });
+  });
+
+  it("strict handUp requires more yDelta than balanced", () => {
+    const pose = createPose([...closeFrontFacingTorso(), landmark("leftWrist", 15, 0.3, 0.36)]);
+    const balanced = resolveGestureThresholds({ precision: "balanced" });
+    const strict = resolveGestureThresholds({ precision: "strict" });
+
+    expect(detectLeftHandUp(pose, balanced)).toMatchObject({ active: true });
+    expect(detectLeftHandUp(pose, strict)).toMatchObject({
+      active: false,
+      metadata: { yMargin: 0.06 },
+    });
+  });
+
+  it("custom handUp threshold override works", () => {
+    const pose = createPose([...closeFrontFacingTorso(), landmark("leftWrist", 15, 0.3, 0.39)]);
+    const thresholds = resolveGestureThresholds({
+      precision: "balanced",
+      thresholds: {
+        handUpYMargin: 0.005,
+      },
+    });
+
+    expect(detectLeftHandUp(pose, thresholds)).toMatchObject({
+      active: true,
+      metadata: { yMargin: 0.005 },
     });
   });
 

@@ -17,6 +17,8 @@ const gesturesElement = document.querySelector<HTMLElement>("#gestures");
 const detectionsPerSecondElement = document.querySelector<HTMLElement>("#detectionsPerSecond");
 const averageDetectionMsElement = document.querySelector<HTMLElement>("#averageDetectionMs");
 const framesSkippedElement = document.querySelector<HTMLElement>("#framesSkipped");
+const precisionElement = document.querySelector<HTMLElement>("#precision");
+const precisionSelect = document.querySelector<HTMLSelectElement>("#precisionSelect");
 const stabilityToggle = document.querySelector<HTMLInputElement>("#stabilityToggle");
 const debugToggle = document.querySelector<HTMLInputElement>("#debugToggle");
 const gestureDebugElement = document.querySelector<HTMLElement>("#gestureDebug");
@@ -31,6 +33,8 @@ if (
   !detectionsPerSecondElement ||
   !averageDetectionMsElement ||
   !framesSkippedElement ||
+  !precisionElement ||
+  !precisionSelect ||
   !stabilityToggle ||
   !debugToggle ||
   !gestureDebugElement
@@ -76,6 +80,7 @@ function createTrackerConfig(): MotionTrackerConfig {
         "handsOnHips",
       ],
       minConfidence: 0.5,
+      precision: precisionSelect.value as MotionTrackerConfig["gestures"]["precision"],
       stability: {
         enabled: stabilityToggle.checked,
         activeFrames: 3,
@@ -131,6 +136,7 @@ async function startTracking(): Promise<void> {
     startButton.disabled = true;
     stopButton.disabled = false;
     stabilityToggle.disabled = true;
+    precisionSelect.disabled = true;
     updatePerformanceReadout();
   });
   tracker.on("stopped", () => {
@@ -138,6 +144,7 @@ async function startTracking(): Promise<void> {
     startButton.disabled = false;
     stopButton.disabled = true;
     stabilityToggle.disabled = false;
+    precisionSelect.disabled = false;
     activeGestures.clear();
     rawGestureDebug.clear();
     stableGestureDebug.clear();
@@ -173,6 +180,7 @@ async function startTracking(): Promise<void> {
     startButton.disabled = false;
     stopButton.disabled = true;
     stabilityToggle.disabled = false;
+    precisionSelect.disabled = false;
   });
 
   try {
@@ -182,6 +190,7 @@ async function startTracking(): Promise<void> {
     startButton.disabled = false;
     stopButton.disabled = true;
     stabilityToggle.disabled = false;
+    precisionSelect.disabled = false;
   }
 }
 
@@ -208,6 +217,7 @@ function updatePerformanceReadout(): void {
   detectionsPerSecondElement.textContent = formatNumber(state?.detectionsPerSecond);
   averageDetectionMsElement.textContent = formatNumber(state?.averageDetectionMs, "ms");
   framesSkippedElement.textContent = String(state?.framesSkipped ?? 0);
+  precisionElement.textContent = precisionSelect.value;
 }
 
 function updateGestureDebug(): void {

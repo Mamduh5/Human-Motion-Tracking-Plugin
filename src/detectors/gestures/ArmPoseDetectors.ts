@@ -1,13 +1,9 @@
 import { getLandmarkByName } from "../../normalizers";
 import type { GestureResult, Landmark, PoseResult } from "../../types";
 import { averageConfidence, calculateAngle, distance2D, isLandmarkVisible } from "../../utils";
+import { resolveGestureThresholds, type GestureThresholds } from "./GestureThresholds";
 
-const MIN_VISIBILITY = 0.5;
-const HAND_UP_Y_MARGIN = 0.03;
-const EXTENDED_ARM_MIN_ANGLE = 150;
-const BENT_ELBOW_MAX_ANGLE = 120;
-const MAX_LEVEL_Y_RATIO = 0.45;
-const HANDS_ON_HIPS_DISTANCE_RATIO = 0.55;
+const DEFAULT_THRESHOLDS = resolveGestureThresholds();
 
 type ArmSide = "left" | "right";
 type HandLandmarkKind = "wrist" | "index" | "pinky" | "thumb";
@@ -50,7 +46,7 @@ interface SideEvaluation {
   requiredVisibility: Record<string, number | undefined>;
 }
 
-type SideEvaluator = (landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics) => SideEvaluation;
+type SideEvaluator = (landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics, thresholds: GestureThresholds) => SideEvaluation;
 
 interface BodyMetrics {
   shoulderWidth?: number;
@@ -58,9 +54,9 @@ interface BodyMetrics {
   scale: number;
 }
 
-export function detectArmsUp(pose: PoseResult): GestureResult {
-  const left = evaluateArmUp(getArmSideLandmarks(pose, "left"), getBodyMetrics(pose));
-  const right = evaluateArmUp(getArmSideLandmarks(pose, "right"), getBodyMetrics(pose));
+export function detectArmsUp(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  const left = evaluateArmUp(getArmSideLandmarks(pose, "left"), getBodyMetrics(pose), thresholds);
+  const right = evaluateArmUp(getArmSideLandmarks(pose, "right"), getBodyMetrics(pose), thresholds);
   const active = left.active && right.active;
 
   return createGestureResult("armsUp", pose.timestamp, active, averageSideConfidence([left, right]), {
@@ -69,23 +65,23 @@ export function detectArmsUp(pose: PoseResult): GestureResult {
   });
 }
 
-export function detectLeftArmExtended(pose: PoseResult): GestureResult {
-  return detectSingleSideGesture("leftArmExtended", pose, "left", evaluateArmExtended);
+export function detectLeftArmExtended(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectSingleSideGesture("leftArmExtended", pose, "left", evaluateArmExtended, thresholds);
 }
 
-export function detectRightArmExtended(pose: PoseResult): GestureResult {
-  return detectSingleSideGesture("rightArmExtended", pose, "right", evaluateArmExtended);
+export function detectRightArmExtended(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectSingleSideGesture("rightArmExtended", pose, "right", evaluateArmExtended, thresholds);
 }
 
-export function detectLeftElbowBent(pose: PoseResult): GestureResult {
-  return detectSingleSideGesture("leftElbowBent", pose, "left", evaluateElbowBent);
+export function detectLeftElbowBent(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectSingleSideGesture("leftElbowBent", pose, "left", evaluateElbowBent, thresholds);
 }
 
-export function detectRightElbowBent(pose: PoseResult): GestureResult {
-  return detectSingleSideGesture("rightElbowBent", pose, "right", evaluateElbowBent);
+export function detectRightElbowBent(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
+  return detectSingleSideGesture("rightElbowBent", pose, "right", evaluateElbowBent, thresholds);
 }
 
-export function detectArmsCrossed(pose: PoseResult): GestureResult {
+export function detectArmsCrossed(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
   const left = getArmSideLandmarks(pose, "left");
   const right = getArmSideLandmarks(pose, "right");
   const required = {
@@ -100,8 +96,8 @@ export function detectArmsCrossed(pose: PoseResult): GestureResult {
     rightPinky: right.pinky,
     rightThumb: right.thumb,
   };
-  const leftHand = getBestVisibleHandPoint(left);
-  const rightHand = getBestVisibleHandPoint(right);
+  const leftHand = getBestVisibleHandPoint(left, thresholds);
+  const rightHand = getBestVisibleHandPoint(right, thresholds);
 
   if (!left.shoulder || !right.shoulder || !hasAnyHandLandmark(left) || !hasAnyHandLandmark(right)) {
     return createGestureResult("armsCrossed", pose.timestamp, false, 0, {
@@ -110,7 +106,7 @@ export function detectArmsCrossed(pose: PoseResult): GestureResult {
     });
   }
 
-  const visibleShoulders = areVisible(left.shoulder, right.shoulder);
+  const visibleShoulders = areVisible(thresholds, left.shoulder, right.shoulder);
 
   if (!visibleShoulders || !leftHand || !rightHand) {
     return createGestureResult("armsCrossed", pose.timestamp, false, averageConfidence([left.shoulder, right.shoulder]), {
@@ -120,8 +116,8 @@ export function detectArmsCrossed(pose: PoseResult): GestureResult {
   }
 
   const shoulderWidth = distance2D(left.shoulder, right.shoulder);
-  const leftCrossed = leftHand.landmark.x > right.shoulder.x - shoulderWidth * 0.2;
-  const rightCrossed = rightHand.landmark.x < left.shoulder.x + shoulderWidth * 0.2;
+  const leftCrossed = leftHand.landmark.x > right.shoulder.x - shoulderWidth * thresholds.crossedArmsDistance;
+  const rightCrossed = rightHand.landmark.x < left.shoulder.x + shoulderWidth * thresholds.crossedArmsDistance;
   const active = leftCrossed && rightCrossed;
 
   return createGestureResult("armsCrossed", pose.timestamp, active, averageConfidence([left.shoulder, right.shoulder, leftHand.landmark, rightHand.landmark]), {
@@ -133,10 +129,10 @@ export function detectArmsCrossed(pose: PoseResult): GestureResult {
   });
 }
 
-export function detectHandsOnHips(pose: PoseResult): GestureResult {
+export function detectHandsOnHips(pose: PoseResult, thresholds = DEFAULT_THRESHOLDS): GestureResult {
   const bodyMetrics = getBodyMetrics(pose);
-  const left = evaluateHandOnHip(getArmSideLandmarks(pose, "left"), bodyMetrics);
-  const right = evaluateHandOnHip(getArmSideLandmarks(pose, "right"), bodyMetrics);
+  const left = evaluateHandOnHip(getArmSideLandmarks(pose, "left"), bodyMetrics, thresholds);
+  const right = evaluateHandOnHip(getArmSideLandmarks(pose, "right"), bodyMetrics, thresholds);
   const active = left.active && right.active;
 
   return createGestureResult("handsOnHips", pose.timestamp, active, averageSideConfidence([left, right]), {
@@ -150,8 +146,9 @@ function detectSingleSideGesture(
   pose: PoseResult,
   side: ArmSide,
   evaluator: SideEvaluator,
+  thresholds: GestureThresholds,
 ): GestureResult {
-  const result = evaluator(getArmSideLandmarks(pose, side), getBodyMetrics(pose));
+  const result = evaluator(getArmSideLandmarks(pose, side), getBodyMetrics(pose), thresholds);
 
   return createGestureResult(name, pose.timestamp, result.active, result.confidence, {
     reason: result.reason,
@@ -165,96 +162,96 @@ function detectSingleSideGesture(
   });
 }
 
-function evaluateArmUp(landmarks: ArmSideLandmarks, _bodyMetrics: BodyMetrics): SideEvaluation {
+function evaluateArmUp(landmarks: ArmSideLandmarks, _bodyMetrics: BodyMetrics, thresholds: GestureThresholds): SideEvaluation {
   const required = getSideRequiredLandmarks(landmarks, ["shoulder"]);
 
   if (!landmarks.shoulder || !hasAnyHandLandmark(landmarks)) {
-    return createSideEvaluation(landmarks, "missing-landmarks", false, required);
+    return createSideEvaluation(landmarks, "missing-landmarks", false, required, thresholds);
   }
 
-  if (!isLandmarkVisible(landmarks.shoulder, MIN_VISIBILITY)) {
-    return createSideEvaluation(landmarks, "low-visibility", false, required);
+  if (!isLandmarkVisible(landmarks.shoulder, thresholds.minVisibility)) {
+    return createSideEvaluation(landmarks, "low-visibility", false, required, thresholds);
   }
 
-  const handTop = getHighestVisibleHandPoint(landmarks);
+  const handTop = getHighestVisibleHandPoint(landmarks, thresholds);
 
   if (!handTop) {
-    return createSideEvaluation(landmarks, "low-visibility", false, required);
+    return createSideEvaluation(landmarks, "low-visibility", false, required, thresholds);
   }
 
   const yDelta = landmarks.shoulder.y - handTop.landmark.y;
-  const active = handTop.landmark.y < landmarks.shoulder.y - HAND_UP_Y_MARGIN;
+  const active = handTop.landmark.y < landmarks.shoulder.y - thresholds.handUpYMargin;
 
-  return createSideEvaluation(landmarks, active ? "active" : "not-high-enough", active, required, {
+  return createSideEvaluation(landmarks, active ? "active" : "not-high-enough", active, required, thresholds, {
     handTop,
     yDelta,
   });
 }
 
-function evaluateArmExtended(landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics): SideEvaluation {
+function evaluateArmExtended(landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics, thresholds: GestureThresholds): SideEvaluation {
   const required = getSideRequiredLandmarks(landmarks, ["shoulder", "elbow"]);
 
   if (!landmarks.shoulder || !landmarks.elbow || !hasAnyHandLandmark(landmarks)) {
-    return createSideEvaluation(landmarks, "missing-landmarks", false, required);
+    return createSideEvaluation(landmarks, "missing-landmarks", false, required, thresholds);
   }
 
-  const hand = getBestVisibleHandPoint(landmarks);
+  const hand = getBestVisibleHandPoint(landmarks, thresholds);
 
-  if (!areVisible(landmarks.shoulder, landmarks.elbow) || !hand) {
-    return createSideEvaluation(landmarks, "low-visibility", false, required);
+  if (!areVisible(thresholds, landmarks.shoulder, landmarks.elbow) || !hand) {
+    return createSideEvaluation(landmarks, "low-visibility", false, required, thresholds);
   }
 
   const elbowAngle = calculateAngle(landmarks.shoulder, landmarks.elbow, hand.landmark);
   const horizontalDirectionActive =
     landmarks.side === "left" ? hand.landmark.x < landmarks.shoulder.x : hand.landmark.x > landmarks.shoulder.x;
-  const level = Math.abs(hand.landmark.y - landmarks.shoulder.y) <= bodyMetrics.scale * MAX_LEVEL_Y_RATIO;
-  const active = elbowAngle >= EXTENDED_ARM_MIN_ANGLE && horizontalDirectionActive && level;
+  const level = Math.abs(hand.landmark.y - landmarks.shoulder.y) <= bodyMetrics.scale * thresholds.armsOpenYOffset;
+  const active = elbowAngle >= thresholds.armExtensionAngle - thresholds.armAngleTolerance && horizontalDirectionActive && level;
 
-  return createSideEvaluation(landmarks, active ? "active" : "not-extended", active, required, {
+  return createSideEvaluation(landmarks, active ? "active" : "not-extended", active, required, thresholds, {
     handTop: hand,
     elbowAngle,
   });
 }
 
-function evaluateElbowBent(landmarks: ArmSideLandmarks, _bodyMetrics: BodyMetrics): SideEvaluation {
+function evaluateElbowBent(landmarks: ArmSideLandmarks, _bodyMetrics: BodyMetrics, thresholds: GestureThresholds): SideEvaluation {
   const required = getSideRequiredLandmarks(landmarks, ["shoulder", "elbow"]);
 
   if (!landmarks.shoulder || !landmarks.elbow || !hasAnyHandLandmark(landmarks)) {
-    return createSideEvaluation(landmarks, "missing-landmarks", false, required);
+    return createSideEvaluation(landmarks, "missing-landmarks", false, required, thresholds);
   }
 
-  const hand = getBestVisibleHandPoint(landmarks);
+  const hand = getBestVisibleHandPoint(landmarks, thresholds);
 
-  if (!areVisible(landmarks.shoulder, landmarks.elbow) || !hand) {
-    return createSideEvaluation(landmarks, "low-visibility", false, required);
+  if (!areVisible(thresholds, landmarks.shoulder, landmarks.elbow) || !hand) {
+    return createSideEvaluation(landmarks, "low-visibility", false, required, thresholds);
   }
 
   const elbowAngle = calculateAngle(landmarks.shoulder, landmarks.elbow, hand.landmark);
-  const active = elbowAngle <= BENT_ELBOW_MAX_ANGLE;
+  const active = elbowAngle <= thresholds.elbowBentAngle + thresholds.armAngleTolerance;
 
-  return createSideEvaluation(landmarks, active ? "active" : "not-bent", active, required, {
+  return createSideEvaluation(landmarks, active ? "active" : "not-bent", active, required, thresholds, {
     handTop: hand,
     elbowAngle,
   });
 }
 
-function evaluateHandOnHip(landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics): SideEvaluation {
+function evaluateHandOnHip(landmarks: ArmSideLandmarks, bodyMetrics: BodyMetrics, thresholds: GestureThresholds): SideEvaluation {
   const required = getSideRequiredLandmarks(landmarks, ["shoulder", "hip"]);
 
   if (!landmarks.shoulder || !landmarks.hip || !hasAnyHandLandmark(landmarks)) {
-    return createSideEvaluation(landmarks, "missing-landmarks", false, required);
+    return createSideEvaluation(landmarks, "missing-landmarks", false, required, thresholds);
   }
 
-  const hand = getBestVisibleHandPoint(landmarks);
+  const hand = getBestVisibleHandPoint(landmarks, thresholds);
 
-  if (!areVisible(landmarks.shoulder, landmarks.hip) || !hand) {
-    return createSideEvaluation(landmarks, "low-visibility", false, required);
+  if (!areVisible(thresholds, landmarks.shoulder, landmarks.hip) || !hand) {
+    return createSideEvaluation(landmarks, "low-visibility", false, required, thresholds);
   }
 
   const handHipDistance = distance2D(hand.landmark, landmarks.hip);
-  const active = handHipDistance <= bodyMetrics.scale * HANDS_ON_HIPS_DISTANCE_RATIO;
+  const active = handHipDistance <= bodyMetrics.scale * thresholds.handsOnHipsDistance;
 
-  return createSideEvaluation(landmarks, active ? "active" : "not-on-hips", active, required, {
+  return createSideEvaluation(landmarks, active ? "active" : "not-on-hips", active, required, thresholds, {
     handTop: hand,
     handHipDistance,
   });
@@ -265,6 +262,7 @@ function createSideEvaluation(
   reason: ArmGestureReason,
   active: boolean,
   required: Record<string, Landmark | undefined>,
+  thresholds: GestureThresholds,
   details: {
     handTop?: HandPoint;
     yDelta?: number;
@@ -273,13 +271,13 @@ function createSideEvaluation(
   } = {},
 ): SideEvaluation {
   const handTop = details.handTop;
-  const visibleHandLandmarks = getVisibleHandPoints(landmarks).map((point) => point.name);
+  const visibleHandLandmarks = getVisibleHandPoints(landmarks, thresholds).map((point) => point.name);
   const confidenceLandmarks = [
     landmarks.shoulder,
     landmarks.elbow,
     landmarks.hip,
     handTop?.landmark,
-  ].filter((landmark): landmark is Landmark => Boolean(landmark && isLandmarkVisible(landmark, MIN_VISIBILITY)));
+  ].filter((landmark): landmark is Landmark => Boolean(landmark && isLandmarkVisible(landmark, thresholds.minVisibility)));
 
   return {
     side: landmarks.side,
@@ -327,8 +325,8 @@ function hasAnyHandLandmark(landmarks: ArmSideLandmarks): boolean {
   return Boolean(landmarks.wrist || landmarks.index || landmarks.pinky || landmarks.thumb);
 }
 
-function getHighestVisibleHandPoint(landmarks: ArmSideLandmarks): HandPoint | undefined {
-  const points = getVisibleHandPoints(landmarks);
+function getHighestVisibleHandPoint(landmarks: ArmSideLandmarks, thresholds: GestureThresholds): HandPoint | undefined {
+  const points = getVisibleHandPoints(landmarks, thresholds);
 
   return points.reduce<HandPoint | undefined>((highest, current) => {
     if (!highest || current.landmark.y < highest.landmark.y) {
@@ -339,16 +337,16 @@ function getHighestVisibleHandPoint(landmarks: ArmSideLandmarks): HandPoint | un
   }, undefined);
 }
 
-function getBestVisibleHandPoint(landmarks: ArmSideLandmarks): HandPoint | undefined {
-  return getVisibleHandPoints(landmarks)[0];
+function getBestVisibleHandPoint(landmarks: ArmSideLandmarks, thresholds: GestureThresholds): HandPoint | undefined {
+  return getVisibleHandPoints(landmarks, thresholds)[0];
 }
 
-function getVisibleHandPoints(landmarks: ArmSideLandmarks): HandPoint[] {
+function getVisibleHandPoints(landmarks: ArmSideLandmarks, thresholds: GestureThresholds): HandPoint[] {
   return (["wrist", "index", "pinky", "thumb"] as const)
     .map((kind) => {
       const landmark = landmarks[kind];
 
-      return landmark && isLandmarkVisible(landmark, MIN_VISIBILITY)
+      return landmark && isLandmarkVisible(landmark, thresholds.minVisibility)
         ? {
             landmark,
             name: getHandLandmarkName(landmarks.side, kind),
@@ -384,8 +382,8 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function areVisible(...landmarks: Landmark[]): boolean {
-  return landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY));
+function areVisible(thresholds: GestureThresholds, ...landmarks: Landmark[]): boolean {
+  return landmarks.every((landmark) => isLandmarkVisible(landmark, thresholds.minVisibility));
 }
 
 function averageSideConfidence(results: SideEvaluation[]): number {

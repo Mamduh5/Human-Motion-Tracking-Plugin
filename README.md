@@ -46,6 +46,7 @@ const config: MotionTrackerConfig = {
     enabled: true,
     names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsUp", "armsCrossed"],
     minConfidence: 0.5,
+    precision: "balanced",
     stability: {
       enabled: true,
       activeFrames: 3,
@@ -98,6 +99,28 @@ On older laptops, prefer a smaller camera stream and lower detection rate:
 - Avoid enabling pose, hands, and face tracking all at once on weak devices.
 - Run `npm run dev:vanilla` manually only when you need the camera demo; it starts a long-running Vite server.
 - For close-up gesture debugging, use the vanilla demo's “Show gesture debug” panel. Disable “Use gesture stability” to see whether raw left/right detector results are active before the 3-frame stability filter.
+
+## Gesture Precision
+
+Gesture precision controls detector sensitivity:
+
+- `loose`: more sensitive, useful for weak webcams, close-up framing, or imperfect lighting.
+- `balanced`: default SDK behavior.
+- `strict`: fewer false positives, useful when camera quality and pose visibility are good.
+
+```ts
+const config: MotionTrackerConfig = {
+  ...baseConfig,
+  gestures: {
+    enabled: true,
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+    precision: "loose",
+    thresholds: {
+      handUpYMargin: 0.02,
+    },
+  },
+};
+```
 
 ## React Adapter
 

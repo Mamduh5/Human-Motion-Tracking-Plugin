@@ -6,6 +6,7 @@ import type {
   PerformanceProfile,
   PoseModelConfig,
 } from "../types";
+import { resolveGestureThresholds, type GestureThresholds } from "../detectors/gestures/GestureThresholds";
 
 const DEFAULT_PERFORMANCE_PROFILE: PerformanceProfile = "balanced";
 const PROFILE_TARGET_FPS: Record<PerformanceProfile, number> = {
@@ -18,6 +19,8 @@ export type ResolvedMotionTrackerConfig = MotionTrackerConfig & {
   pose: PoseModelConfig;
   performance: Required<PerformanceConfig>;
   gestures: GestureConfig & {
+    precision: NonNullable<GestureConfig["precision"]>;
+    thresholds: GestureThresholds;
     stability: Required<GestureStabilityConfig>;
   };
 };
@@ -58,6 +61,8 @@ function resolveGestureConfig(gestures: GestureConfig): ResolvedMotionTrackerCon
 
   return {
     ...gestures,
+    precision: gestures.precision ?? "balanced",
+    thresholds: resolveGestureThresholds(gestures),
     stability: {
       enabled: stability.enabled ?? true,
       activeFrames,

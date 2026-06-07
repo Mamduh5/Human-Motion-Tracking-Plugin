@@ -17,6 +17,18 @@ describe("MotionTracker", () => {
       targetFps: 15,
       adaptive: false,
     });
+    expect(resolveMotionTrackerConfig(config).gestures).toMatchObject({
+      precision: "balanced",
+      thresholds: {
+        handUpYMargin: 0.03,
+        minVisibility: 0.5,
+      },
+      stability: {
+        enabled: true,
+        activeFrames: 3,
+        inactiveFrames: 3,
+      },
+    });
   });
 
   it("starts camera and tracker, emits started, and schedules a frame", async () => {
@@ -384,6 +396,48 @@ describe("MotionTracker", () => {
       "armsCrossed",
       "handsOnHips",
     ]);
+  });
+
+  it("passes configured gesture precision thresholds to detectors", async () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftHip", 23, 0.35, 0.7),
+      landmark("rightHip", 24, 0.65, 0.7),
+      landmark("leftWrist", 15, 0.3, 0.375),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          precision: "loose",
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gesture: expect.objectContaining({
+          metadata: expect.objectContaining({
+            yMargin: 0.015,
+          }),
+        }),
+      }),
+    );
   });
 
   it("emits active false after three stable inactive frames following an active gesture", async () => {

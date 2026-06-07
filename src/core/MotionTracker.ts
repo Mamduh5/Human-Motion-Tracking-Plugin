@@ -33,7 +33,7 @@ import { GestureStabilityFilter } from "./GestureStabilityFilter";
 import { resolveMotionTrackerConfig, type ResolvedMotionTrackerConfig } from "./TrackerConfig";
 import { createInitialTrackerState, type MotionTrackerState } from "./TrackerState";
 
-type GestureDetector = (pose: PoseResult) => GestureResult;
+type GestureDetector = (pose: PoseResult, thresholds: ResolvedMotionTrackerConfig["gestures"]["thresholds"]) => GestureResult;
 type ExerciseAnalyzer = {
   analyze(pose: PoseResult): ExerciseResult;
   reset?(): void;
@@ -307,7 +307,7 @@ export class MotionTracker {
         continue;
       }
 
-      const gesture = detector(pose);
+      const gesture = detector(pose, this.config.gestures.thresholds);
       const minConfidence = this.config.gestures.minConfidence ?? 0;
       const passedMinConfidence = gesture.confidence >= minConfidence;
       let stableGesture: GestureResult | undefined;
