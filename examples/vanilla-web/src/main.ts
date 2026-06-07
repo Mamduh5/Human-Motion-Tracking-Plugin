@@ -1,6 +1,9 @@
 import {
   CameraManager,
   MotionTracker,
+  clearCalibration as clearStoredCalibration,
+  loadCalibration as loadStoredCalibration,
+  saveCalibration as saveStoredCalibration,
   type CalibrationMetrics,
   type CalibrationProgressEvent,
   type CalibrationResult,
@@ -17,12 +20,17 @@ const startButton = document.querySelector<HTMLButtonElement>("#startButton");
 const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
 const calibrateButton = document.querySelector<HTMLButtonElement>("#calibrateButton");
 const cancelCalibrationButton = document.querySelector<HTMLButtonElement>("#cancelCalibrationButton");
+const saveCalibrationButton = document.querySelector<HTMLButtonElement>("#saveCalibrationButton");
+const loadCalibrationButton = document.querySelector<HTMLButtonElement>("#loadCalibrationButton");
+const clearSavedCalibrationButton = document.querySelector<HTMLButtonElement>("#clearSavedCalibrationButton");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const gesturesElement = document.querySelector<HTMLElement>("#gestures");
 const calibrationStatusElement = document.querySelector<HTMLElement>("#calibrationStatus");
 const calibrationProgressElement = document.querySelector<HTMLElement>("#calibrationProgress");
 const calibrationQualityElement = document.querySelector<HTMLElement>("#calibrationQuality");
+const calibrationSourceElement = document.querySelector<HTMLElement>("#calibrationSource");
 const calibrationWarningsElement = document.querySelector<HTMLElement>("#calibrationWarnings");
+const calibrationQaWarningElement = document.querySelector<HTMLElement>("#calibrationQaWarning");
 const calibrationShoulderWidthElement = document.querySelector<HTMLElement>("#calibrationShoulderWidth");
 const calibrationTorsoHeightElement = document.querySelector<HTMLElement>("#calibrationTorsoHeight");
 const calibrationBodyScaleElement = document.querySelector<HTMLElement>("#calibrationBodyScale");
@@ -43,12 +51,17 @@ if (
   !stopButton ||
   !calibrateButton ||
   !cancelCalibrationButton ||
+  !saveCalibrationButton ||
+  !loadCalibrationButton ||
+  !clearSavedCalibrationButton ||
   !statusElement ||
   !gesturesElement ||
   !calibrationStatusElement ||
   !calibrationProgressElement ||
   !calibrationQualityElement ||
+  !calibrationSourceElement ||
   !calibrationWarningsElement ||
+  !calibrationQaWarningElement ||
   !calibrationShoulderWidthElement ||
   !calibrationTorsoHeightElement ||
   !calibrationBodyScaleElement ||
@@ -65,6 +78,7 @@ if (
   throw new Error("Example UI failed to initialize.");
 }
 
+const CALIBRATION_STORAGE_KEY = "humanMotionTrackingCalibration";
 const activeGestures = new Map<string, GestureResult>();
 const rawGestureDebug = new Map<string, GestureDebugEvent>();
 const stableGestureDebug = new Map<string, GestureResult>();
@@ -151,6 +165,18 @@ cancelCalibrationButton.addEventListener("click", () => {
   tracker?.cancelCalibration();
 });
 
+saveCalibrationButton.addEventListener("click", () => {
+  saveCurrentCalibration();
+});
+
+loadCalibrationButton.addEventListener("click", () => {
+  loadSavedCalibration();
+});
+
+clearSavedCalibrationButton.addEventListener("click", () => {
+  clearSavedCalibration();
+});
+
 debugToggle.addEventListener("change", () => {
   updateGestureDebug();
 });
@@ -179,6 +205,8 @@ async function startTracking(): Promise<void> {
     stopButton.disabled = false;
     calibrateButton.disabled = false;
     cancelCalibrationButton.disabled = true;
+    saveCalibrationButton.disabled = true;
+    loadCalibrationButton.disabled = false;
     stabilityToggle.disabled = true;
     precisionSelect.disabled = true;
     updatePerformanceReadout();
@@ -189,6 +217,8 @@ async function startTracking(): Promise<void> {
     stopButton.disabled = true;
     calibrateButton.disabled = true;
     cancelCalibrationButton.disabled = true;
+    saveCalibrationButton.disabled = true;
+    loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
     activeGestures.clear();
@@ -226,6 +256,7 @@ async function startTracking(): Promise<void> {
     calibrationStatusElement.textContent = "Collecting";
     calibrateButton.disabled = true;
     cancelCalibrationButton.disabled = false;
+    saveCalibrationButton.disabled = true;
     updateCalibrationReadout({
       status: "collecting",
       elapsedMs: 0,
@@ -242,13 +273,18 @@ async function startTracking(): Promise<void> {
     calibrationProgressElement.textContent = "100%";
     calibrationQualityElement.textContent = result.quality;
     calibrationWarningsElement.textContent = formatWarnings(result.warnings);
+    updateCalibrationSource("session");
+    updateCalibrationQaWarning(result);
     updateCalibrationMetrics(result.metrics);
+    saveStoredCalibration(CALIBRATION_STORAGE_KEY, result);
+    saveCalibrationButton.disabled = false;
     calibrateButton.disabled = false;
     cancelCalibrationButton.disabled = true;
   });
   tracker.on("calibrationFailed", (event) => {
     calibrationStatusElement.textContent = event.message;
     calibrationWarningsElement.textContent = formatWarnings(event.warnings);
+    calibrationQaWarningElement.textContent = formatWarnings(event.warnings);
     calibrateButton.disabled = false;
     cancelCalibrationButton.disabled = true;
   });
@@ -263,6 +299,8 @@ async function startTracking(): Promise<void> {
     stopButton.disabled = true;
     calibrateButton.disabled = true;
     cancelCalibrationButton.disabled = true;
+    saveCalibrationButton.disabled = true;
+    loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
   });
@@ -275,6 +313,8 @@ async function startTracking(): Promise<void> {
     stopButton.disabled = true;
     calibrateButton.disabled = true;
     cancelCalibrationButton.disabled = true;
+    saveCalibrationButton.disabled = true;
+    loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
   }
@@ -291,6 +331,8 @@ function setControlsStarting(): void {
   stopButton.disabled = true;
   calibrateButton.disabled = true;
   cancelCalibrationButton.disabled = true;
+  saveCalibrationButton.disabled = true;
+  loadCalibrationButton.disabled = true;
 }
 
 function startCalibration(): void {
@@ -304,6 +346,45 @@ function startCalibration(): void {
   } catch (error) {
     calibrationStatusElement.textContent = error instanceof Error ? error.message : String(error);
   }
+}
+
+function saveCurrentCalibration(): void {
+  const result = tracker?.exportCalibration();
+
+  if (!result) {
+    calibrationStatusElement.textContent = "No calibration to save";
+    return;
+  }
+
+  calibrationStatusElement.textContent = saveStoredCalibration(CALIBRATION_STORAGE_KEY, result) ? "Saved" : "Save unavailable";
+  saveCalibrationButton.disabled = false;
+}
+
+function loadSavedCalibration(): void {
+  const result = loadStoredCalibration(CALIBRATION_STORAGE_KEY);
+
+  if (!result || !tracker) {
+    calibrationStatusElement.textContent = result ? "Start tracking before loading" : "No saved calibration";
+    return;
+  }
+
+  tracker.importCalibration(result);
+  calibrationStatusElement.textContent = "Loaded";
+  calibrationProgressElement.textContent = "100%";
+  calibrationQualityElement.textContent = result.quality;
+  calibrationWarningsElement.textContent = formatWarnings(result.warnings);
+  updateCalibrationSource("saved");
+  updateCalibrationQaWarning(result);
+  updateCalibrationMetrics(result.metrics);
+  saveCalibrationButton.disabled = false;
+}
+
+function clearSavedCalibration(): void {
+  clearStoredCalibration(CALIBRATION_STORAGE_KEY);
+  tracker?.clearCalibration();
+  resetCalibrationReadout();
+  calibrationStatusElement.textContent = "Saved calibration cleared";
+  saveCalibrationButton.disabled = true;
 }
 
 function updateGestureText(): void {
@@ -327,6 +408,7 @@ function updateCalibrationReadout(progress: CalibrationProgressEvent): void {
   calibrationProgressElement.textContent = `${Math.round(percent)}%`;
   calibrationQualityElement.textContent = progress.quality;
   calibrationWarningsElement.textContent = formatWarnings(progress.warnings);
+  updateCalibrationQaWarning(progress);
   updateCalibrationMetrics(progress.metrics);
 }
 
@@ -341,8 +423,35 @@ function resetCalibrationReadout(): void {
   calibrationStatusElement.textContent = "Idle";
   calibrationProgressElement.textContent = "0%";
   calibrationQualityElement.textContent = "n/a";
+  updateCalibrationSource("none");
   calibrationWarningsElement.textContent = "None";
+  calibrationQaWarningElement.textContent = "None";
   updateCalibrationMetrics(undefined);
+}
+
+function updateCalibrationSource(source: "none" | "session" | "saved"): void {
+  calibrationSourceElement.textContent =
+    source === "session" ? "active for this session" : source === "saved" ? "loaded from saved data" : "none";
+}
+
+function updateCalibrationQaWarning(
+  calibration: Pick<CalibrationProgressEvent, "quality" | "sampleCount" | "metrics" | "warnings">,
+): void {
+  const warnings: string[] = [];
+
+  if (calibration.quality === "poor") {
+    warnings.push("Calibration quality is poor");
+  }
+
+  if ((calibration.metrics?.averageVisibility ?? 1) < 0.65) {
+    warnings.push("Average visibility is low");
+  }
+
+  if (calibration.warnings?.some((warning) => warning.toLowerCase().includes("too few samples"))) {
+    warnings.push("Too few usable samples");
+  }
+
+  calibrationQaWarningElement.textContent = warnings.length > 0 ? warnings.join(", ") : "None";
 }
 
 function updateGestureDebug(): void {

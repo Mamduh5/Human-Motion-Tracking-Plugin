@@ -241,12 +241,46 @@ try {
 }
 ```
 
+Saved calibration can make repeated browser use faster:
+
+```ts
+const result = tracker.getCalibration();
+
+if (result) {
+  localStorage.setItem("motionCalibration", JSON.stringify(result));
+}
+```
+
+Redo saved calibration when camera distance, lighting, camera angle, or the user changes. Saved data is user/camera-specific and should not be shared across people or substantially different setups.
+
+The package also provides safe helpers:
+
+```ts
+import { loadCalibration, saveCalibration } from "human-motion-tracking-plugin";
+
+const saved = loadCalibration("motionCalibration");
+
+if (saved) {
+  tracker.importCalibration(saved);
+}
+
+const current = tracker.exportCalibration();
+
+if (current) {
+  saveCalibration("motionCalibration", current);
+}
+```
+
+The helpers default to `localStorage` only when browser APIs are available. In non-browser environments they return without throwing.
+
 Available calibration methods:
 
 - `calibrate(options?)`: starts calibration and resolves with a completed result.
 - `startCalibration(options?)`: starts sampling from the existing tracking loop.
 - `cancelCalibration()`: cancels an active calibration.
 - `getCalibration()`: returns the last completed or applied result.
+- `exportCalibration()`: returns the current calibration result for persistence.
+- `importCalibration(result)`: validates and applies a saved calibration result.
 - `applyCalibration(result)`: applies recommended thresholds.
 - `clearCalibration()`: removes applied calibration thresholds.
 
@@ -523,10 +557,13 @@ Then:
 2. Click Start.
 3. Click Calibrate and stand front-facing with arms relaxed for 3 seconds.
 4. Confirm progress reaches 100%, quality and warnings update, and shoulder width, torso height, body scale, and average visibility display values.
-5. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
-6. Try close-up and full-body framing after calibration to compare gesture threshold scaling.
-7. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
-8. Click Stop to stop the stream.
+5. Confirm the source reads "active for this session"; the demo auto-saves completed calibration.
+6. Stop and start tracking again, then click Load calibration and confirm the source reads "loaded from saved data".
+7. Click Clear saved calibration and confirm the source returns to "none".
+8. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
+9. Try close-up and full-body framing after calibration to compare gesture threshold scaling.
+10. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
+11. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
 By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes.

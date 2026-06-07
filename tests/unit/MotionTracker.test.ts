@@ -500,6 +500,77 @@ describe("MotionTracker", () => {
     );
   });
 
+  it("importCalibration applies thresholds and can be exported", async () => {
+    const pose = createPose([
+      ...createCalibrationTorso(),
+      landmark("leftWrist", 15, 0.3, 0.375),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const result = createCalibrationResult({ handUpYMargin: 0.015 });
+    const gestureHandler = vi.fn();
+
+    tracker.importCalibration(result);
+    tracker.on("gesture", gestureHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(tracker.exportCalibration()).toBe(result);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
+  it("clearCalibration resets applied thresholds", async () => {
+    const pose = createPose([
+      ...createCalibrationTorso(),
+      landmark("leftWrist", 15, 0.3, 0.375),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.applyCalibration(createCalibrationResult({ handUpYMargin: 0.015 }));
+    tracker.clearCalibration();
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(tracker.exportCalibration()).toBeUndefined();
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: false }));
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gesture: expect.objectContaining({
+          metadata: expect.objectContaining({ yMargin: 0.03 }),
+        }),
+      }),
+    );
+  });
+
   it("keeps explicit user thresholds above applied calibration thresholds", async () => {
     const pose = createPose([
       ...createCalibrationTorso(),

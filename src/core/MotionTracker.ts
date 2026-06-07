@@ -1,6 +1,6 @@
 import type { CameraSource } from "../camera";
 import { CameraManager } from "../camera";
-import { CalibrationManager } from "../calibration";
+import { CalibrationManager, validateCalibrationResult } from "../calibration";
 import {
   SquatAnalyzer,
   detectArmsCrossed,
@@ -271,7 +271,19 @@ export class MotionTracker {
     return this.calibrationResult;
   }
 
+  exportCalibration(): CalibrationResult | undefined {
+    return this.calibrationResult;
+  }
+
+  importCalibration(result: CalibrationResult): void {
+    this.applyCalibration(result);
+  }
+
   applyCalibration(result: CalibrationResult): void {
+    if (!validateCalibrationResult(result)) {
+      throw new Error("Invalid calibration result.");
+    }
+
     this.calibrationResult = result;
     this.appliedCalibration = result;
     this.gestureStabilityFilter.reset();

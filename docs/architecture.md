@@ -111,6 +111,8 @@ The arm-pose gestures use Pose Landmarker body landmarks only. They do not requi
 
 Calibration is optional and pose-only. It improves threshold scaling for close-up and full-body camera views, but it does not replace MediaPipe pose accuracy. Low visibility, missing shoulders, missing hips, side-facing poses, and too few usable samples are reported as warnings.
 
+Calibration results are plain JSON-compatible objects. Serialization helpers validate the result shape before parsing or stringifying, and storage helpers can save/load from `localStorage` when browser APIs are available. Saved calibration should be redone when camera distance, lighting, camera angle, or the user changes.
+
 When calibration is applied, gesture thresholds resolve in this order:
 
 1. Gesture precision preset.

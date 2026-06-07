@@ -224,6 +224,9 @@
         <button id="stopButton" type="button" disabled>Stop</button>
         <button id="calibrateButton" type="button" disabled>Calibrate</button>
         <button id="cancelCalibrationButton" type="button" disabled>Cancel calibration</button>
+        <button id="saveCalibrationButton" type="button" disabled>Save calibration</button>
+        <button id="loadCalibrationButton" type="button" disabled>Load calibration</button>
+        <button id="clearSavedCalibrationButton" type="button">Clear saved calibration</button>
       </div>
 
       <section class="readout calibration-readout" aria-live="polite">
@@ -241,8 +244,16 @@
           <p id="calibrationQuality" class="value">n/a</p>
         </div>
         <div>
+          <p class="label">Source</p>
+          <p id="calibrationSource" class="value">none</p>
+        </div>
+        <div>
           <p class="label">Warnings</p>
           <p id="calibrationWarnings" class="value value-small">None</p>
+        </div>
+        <div>
+          <p class="label">QA warning</p>
+          <p id="calibrationQaWarning" class="value value-small">None</p>
         </div>
       </section>
 

@@ -161,6 +161,18 @@ const result = await tracker.calibrate({ durationMs: 3000 });
 tracker.applyCalibration(result);
 ```
 
+Saved calibration is useful for repeated browser sessions. Redo calibration when camera distance, lighting, camera angle, or the user changes.
+
+```ts
+const result = tracker.getCalibration();
+
+if (result) {
+  localStorage.setItem("motionCalibration", JSON.stringify(result));
+}
+```
+
+The SDK also exports `serializeCalibration`, `parseCalibration`, `saveCalibration`, `loadCalibration`, and `clearCalibration` for safer persistence. `saveCalibration` and `loadCalibration` use `localStorage` only when browser APIs are available, so they are safe to call in tests and non-browser environments.
+
 Calibration thresholds are resolved in this order: gesture precision preset, applied calibration recommendations, then explicit `gestures.thresholds`. User-provided thresholds win so existing app-specific tuning remains stable.
 
 ## React Adapter
@@ -206,7 +218,10 @@ Manual calibration test:
 2. Click Calibrate.
 3. Stand front-facing with arms relaxed for 3 seconds.
 4. Confirm progress reaches 100%, quality and warnings update, and shoulder width, torso height, body scale, and average visibility display values.
-5. Raise a hand in both close-up and full-body framing and compare gesture behavior before and after calibration.
+5. Confirm the source reads "active for this session"; click Save calibration or rely on the demo auto-save.
+6. Stop and start tracking, then click Load calibration and confirm the source reads "loaded from saved data".
+7. Click Clear saved calibration and confirm the source returns to "none".
+8. Raise a hand in both close-up and full-body framing and compare gesture behavior before and after calibration.
 
 `leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
 The arm-pose gestures use Pose Landmarker body landmarks only. They do not require or enable MediaPipe hand tracking.
