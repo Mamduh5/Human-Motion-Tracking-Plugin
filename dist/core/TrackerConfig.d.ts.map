@@ -1,0 +1,1 @@
+{"version":3,"file":"TrackerConfig.d.ts","sourceRoot":"","sources":["../../src/core/TrackerConfig.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,mBAAmB,EAAE,eAAe,EAAE,MAAM,UAAU,CAAC;AAErE,MAAM,MAAM,2BAA2B,GAAG,mBAAmB,GAAG;IAC9D,IAAI,EAAE,eAAe,CAAC;CACvB,CAAC;AAEF,wBAAgB,0BAA0B,CAAC,MAAM,EAAE,mBAAmB,GAAG,2BAA2B,CAcnG"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"MotionEvents.d.ts","sourceRoot":"","sources":["../../src/events/MotionEvents.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,qBAAqB,EAAE,sBAAsB,EAAE,MAAM,UAAU,CAAC;AAE9E,eAAO,MAAM,YAAY;;;;;;;CAOkC,CAAC;AAE5D,MAAM,MAAM,eAAe,GAAG,sBAAsB,CAAC;AACrD,MAAM,MAAM,kBAAkB,CAAC,UAAU,SAAS,eAAe,IAAI,qBAAqB,CAAC,UAAU,CAAC,CAAC"}
