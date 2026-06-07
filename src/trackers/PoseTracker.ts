@@ -1,43 +1,8 @@
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
 
-import type { Landmark, PoseResult } from "../types";
+import { calculateLandmarkConfidence, normalizeLandmarks } from "../normalizers";
+import type { PoseResult } from "../types";
 import type { MotionLandmarkTracker, PoseTrackerConfig } from "./interfaces";
-
-const POSE_LANDMARK_NAMES = [
-  "nose",
-  "leftEyeInner",
-  "leftEye",
-  "leftEyeOuter",
-  "rightEyeInner",
-  "rightEye",
-  "rightEyeOuter",
-  "leftEar",
-  "rightEar",
-  "mouthLeft",
-  "mouthRight",
-  "leftShoulder",
-  "rightShoulder",
-  "leftElbow",
-  "rightElbow",
-  "leftWrist",
-  "rightWrist",
-  "leftPinky",
-  "rightPinky",
-  "leftIndex",
-  "rightIndex",
-  "leftThumb",
-  "rightThumb",
-  "leftHip",
-  "rightHip",
-  "leftKnee",
-  "rightKnee",
-  "leftAnkle",
-  "rightAnkle",
-  "leftHeel",
-  "rightHeel",
-  "leftFootIndex",
-  "rightFootIndex",
-] as const;
 
 interface MediaPipeLandmarkLike {
   x: number;
@@ -60,9 +25,9 @@ export function convertPoseLandmarkerResult(result: MediaPipePoseResultLike, tim
 
   return {
     timestamp,
-    landmarks: convertLandmarks(landmarks),
-    worldLandmarks: result.worldLandmarks?.[0] ? convertLandmarks(result.worldLandmarks[0]) : undefined,
-    confidence: calculateConfidence(landmarks),
+    landmarks: normalizeLandmarks(landmarks),
+    worldLandmarks: result.worldLandmarks?.[0] ? normalizeLandmarks(result.worldLandmarks[0]) : undefined,
+    confidence: calculateLandmarkConfidence(landmarks),
   };
 }
 
@@ -109,29 +74,4 @@ export class PoseTracker implements MotionLandmarkTracker {
     this.#landmarker?.close();
     this.#landmarker = undefined;
   }
-}
-
-function convertLandmarks(landmarks: MediaPipeLandmarkLike[]): Landmark[] {
-  return landmarks.map((landmark, index) => ({
-    name: POSE_LANDMARK_NAMES[index] ?? `landmark-${index}`,
-    index,
-    x: landmark.x,
-    y: landmark.y,
-    z: landmark.z,
-    visibility: landmark.visibility,
-  }));
-}
-
-function calculateConfidence(landmarks: MediaPipeLandmarkLike[]): number {
-  const visibilityValues = landmarks
-    .map((landmark) => landmark.visibility)
-    .filter((visibility): visibility is number => typeof visibility === "number");
-
-  if (visibilityValues.length === 0) {
-    return 1;
-  }
-
-  const totalVisibility = visibilityValues.reduce((total, visibility) => total + visibility, 0);
-
-  return totalVisibility / visibilityValues.length;
 }
