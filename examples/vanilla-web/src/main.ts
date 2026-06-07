@@ -1,6 +1,7 @@
 import {
   CameraManager,
   MotionTracker,
+  type GestureDebugEvent,
   type GestureResult,
   type MotionTrackerConfig,
   type PoseResult,
@@ -32,7 +33,8 @@ if (
 }
 
 const activeGestures = new Map<string, GestureResult>();
-const gestureDebug = new Map<string, GestureResult>();
+const rawGestureDebug = new Map<string, GestureDebugEvent>();
+const stableGestureDebug = new Map<string, GestureResult>();
 let tracker: MotionTracker | undefined;
 
 function createTrackerConfig(): MotionTrackerConfig {
@@ -88,7 +90,8 @@ debugToggle.addEventListener("change", () => {
 async function startTracking(): Promise<void> {
   setControlsStarting();
   activeGestures.clear();
-  gestureDebug.clear();
+  rawGestureDebug.clear();
+  stableGestureDebug.clear();
   updateGestureText();
   updateGestureDebug();
   const config = createTrackerConfig();
@@ -110,7 +113,8 @@ async function startTracking(): Promise<void> {
     startButton.disabled = false;
     stopButton.disabled = true;
     activeGestures.clear();
-    gestureDebug.clear();
+    rawGestureDebug.clear();
+    stableGestureDebug.clear();
     updateGestureText();
     updateGestureDebug();
     clearPose(overlay);
@@ -125,7 +129,12 @@ async function startTracking(): Promise<void> {
       activeGestures.delete(gesture.name);
     }
 
-    gestureDebug.set(gesture.name, gesture);
+    stableGestureDebug.set(gesture.name, gesture);
+    updateGestureText();
+    updateGestureDebug();
+  });
+  tracker.on("gestureDebug", (debugEvent: GestureDebugEvent) => {
+    rawGestureDebug.set(debugEvent.gesture.name, debugEvent);
     updateGestureText();
     updateGestureDebug();
   });
@@ -169,21 +178,65 @@ function updateGestureDebug(): void {
   }
 
   gestureDebugElement.replaceChildren();
-
-  if (gestureDebug.size === 0) {
-    const empty = document.createElement("p");
-    empty.className = "debug-empty";
-    empty.textContent = "No stable gesture events yet.";
-    gestureDebugElement.append(empty);
-    return;
-  }
-
-  for (const gesture of gestureDebug.values()) {
-    gestureDebugElement.append(createGestureDebugRow(gesture));
-  }
+  gestureDebugElement.append(
+    createDebugSection("Raw detector results", rawGestureDebug, createRawGestureDebugRow, "No raw detector results yet."),
+  );
+  gestureDebugElement.append(
+    createDebugSection("Stable emitted gestures", stableGestureDebug, createStableGestureDebugRow, "No stable gesture events yet."),
+  );
 }
 
-function createGestureDebugRow(gesture: GestureResult): HTMLElement {
+function createDebugSection<TValue>(
+  title: string,
+  rows: Map<string, TValue>,
+  createRow: (value: TValue) => HTMLElement,
+  emptyText: string,
+): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "debug-section";
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  section.append(heading);
+
+  if (rows.size === 0) {
+    const empty = document.createElement("p");
+    empty.className = "debug-empty";
+    empty.textContent = emptyText;
+    section.append(empty);
+    return section;
+  }
+
+  for (const row of rows.values()) {
+    section.append(createRow(row));
+  }
+
+  return section;
+}
+
+function createRawGestureDebugRow(debugEvent: GestureDebugEvent): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "debug-row debug-row-raw";
+  const gesture = debugEvent.gesture;
+  const metadata = gesture.metadata ?? {};
+  const values = [
+    gesture.name,
+    `active: ${gesture.active ? "true" : "false"}`,
+    `confidence: ${gesture.confidence.toFixed(2)}`,
+    `reason: ${formatMetadataValue(metadata.reason)}`,
+    `orientation: ${formatMetadataValue(metadata.orientation)}`,
+    `wristY: ${formatMetadataValue(metadata.wristY)}`,
+    `shoulderY: ${formatMetadataValue(metadata.shoulderY)}`,
+    `visibility: ${formatMetadataValue(metadata.requiredVisibility)}`,
+    `min: ${debugEvent.passedMinConfidence ? "pass" : "fail"}`,
+    `stable: ${debugEvent.stabilityEmitted ? "emitted" : "held"}`,
+  ];
+
+  appendCells(row, values);
+
+  return row;
+}
+
+function createStableGestureDebugRow(gesture: GestureResult): HTMLElement {
   const row = document.createElement("div");
   row.className = "debug-row";
 
@@ -197,18 +250,28 @@ function createGestureDebugRow(gesture: GestureResult): HTMLElement {
     `torsoWidth: ${typeof torsoWidth === "number" ? torsoWidth.toFixed(3) : "n/a"}`,
   ];
 
+  appendCells(row, values);
+
+  return row;
+}
+
+function appendCells(row: HTMLElement, values: string[]): void {
   for (const value of values) {
     const cell = document.createElement("span");
     cell.textContent = value;
     row.append(cell);
   }
-
-  return row;
 }
 
 function formatMetadataValue(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, entryValue]) => `${key}:${String(entryValue)}`)
+      .join(", ");
   }
 
   return "n/a";

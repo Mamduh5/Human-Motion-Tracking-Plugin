@@ -90,6 +90,56 @@ describe("MotionTracker", () => {
     expect(gestureHandler).not.toHaveBeenCalledWith(expect.objectContaining({ name: "bothHandsUp", active: true }));
   });
 
+  it("emits raw gesture debug results when stability filtering suppresses gesture events", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createCloseUpBothHandsUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).not.toHaveBeenCalled();
+    expect(debugHandler).toHaveBeenCalledTimes(4);
+    expect(debugHandler.mock.calls.map(([event]) => event.gesture.name)).toEqual([
+      "handUp",
+      "leftHandUp",
+      "rightHandUp",
+      "bothHandsUp",
+    ]);
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gesture: expect.objectContaining({
+          name: "leftHandUp",
+          active: true,
+          metadata: expect.objectContaining({
+            reason: "active",
+            orientation: "unknown",
+            wristY: 0.2,
+            shoulderY: 0.4,
+            requiredVisibility: expect.objectContaining({
+              leftWrist: 1,
+              leftShoulder: 1,
+            }),
+          }),
+        }),
+        passedMinConfidence: true,
+        stabilityEmitted: false,
+        minConfidence: 0,
+      }),
+    );
+  });
+
   it("emits active true after three stable leftHandUp frames", async () => {
     const { tracker, raf } = createMotionTracker({
       landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose(), createLeftHandUpPose()]),
@@ -111,6 +161,32 @@ describe("MotionTracker", () => {
 
     expect(gestureHandler).toHaveBeenCalledTimes(1);
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
+  it("keeps stable gesture event behavior unchanged while reporting debug emission status", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose(), createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(debugHandler.mock.calls.map(([event]) => event.stabilityEmitted)).toEqual([false, false, true]);
   });
 
   it("emits active true for the built-in generic handUp detector", async () => {

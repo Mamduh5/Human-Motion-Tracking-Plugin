@@ -17,9 +17,18 @@ export interface TrackerLifecycleEvent {
   timestamp: number;
 }
 
+export interface GestureDebugEvent {
+  gesture: GestureResult;
+  passedMinConfidence: boolean;
+  stabilityEmitted: boolean;
+  stableGesture?: GestureResult;
+  minConfidence: number;
+}
+
 export interface MotionTrackerEventMap {
   pose: PoseResult;
   gesture: GestureResult;
+  gestureDebug: GestureDebugEvent;
   exercise: ExerciseResult;
   error: TrackerErrorEvent;
   started: TrackerLifecycleEvent;

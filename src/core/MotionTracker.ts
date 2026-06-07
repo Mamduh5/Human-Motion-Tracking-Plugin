@@ -12,7 +12,15 @@ import {
 import { EventEmitter } from "../events";
 import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugins";
 import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
-import type { ExerciseResult, GestureResult, MotionTrackerConfig, MotionTrackerEventMap, PoseResult, TrackerErrorEvent } from "../types";
+import type {
+  ExerciseResult,
+  GestureDebugEvent,
+  GestureResult,
+  MotionTrackerConfig,
+  MotionTrackerEventMap,
+  PoseResult,
+  TrackerErrorEvent,
+} from "../types";
 import { getTimestamp } from "../utils";
 import { GestureStabilityFilter } from "./GestureStabilityFilter";
 import { resolveMotionTrackerConfig, type ResolvedMotionTrackerConfig } from "./TrackerConfig";
@@ -282,14 +290,25 @@ export class MotionTracker {
       }
 
       const gesture = detector(pose);
+      const minConfidence = this.config.gestures.minConfidence ?? 0;
+      const passedMinConfidence = gesture.confidence >= minConfidence;
+      let stableGesture: GestureResult | undefined;
 
-      if (gesture.confidence >= (this.config.gestures.minConfidence ?? 0)) {
-        const stableGesture = this.gestureStabilityFilter.filter(gesture);
+      if (passedMinConfidence) {
+        stableGesture = this.gestureStabilityFilter.filter(gesture) ?? undefined;
 
         if (stableGesture) {
           this.emitGestureEvent(stableGesture);
         }
       }
+
+      this.emitGestureDebugEvent({
+        gesture,
+        passedMinConfidence,
+        stabilityEmitted: Boolean(stableGesture),
+        stableGesture,
+        minConfidence,
+      });
     }
   }
 
@@ -343,6 +362,10 @@ export class MotionTracker {
   private emitGestureEvent(gesture: GestureResult): void {
     this.events.emit("gesture", gesture);
     this.pluginManager.notifyGesture(gesture);
+  }
+
+  private emitGestureDebugEvent(debugEvent: GestureDebugEvent): void {
+    this.events.emit("gestureDebug", debugEvent);
   }
 
   private emitExerciseEvent(exercise: ExerciseResult): void {

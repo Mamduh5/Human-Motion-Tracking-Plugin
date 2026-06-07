@@ -13,6 +13,7 @@ export type { ExerciseResult } from "./exercises";
 export type { GestureMetadata, GestureResult } from "./gestures";
 export type { Landmark, PoseResult } from "./landmarks";
 export type {
+  GestureDebugEvent,
   MotionTrackerEvent,
   MotionTrackerEventMap,
   MotionTrackerEventName,

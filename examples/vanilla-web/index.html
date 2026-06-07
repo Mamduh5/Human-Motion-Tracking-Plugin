@@ -123,7 +123,7 @@
 
       .gesture-debug {
         display: grid;
-        gap: 8px;
+        gap: 14px;
         padding: 12px 14px;
         border: 1px solid #d8e0e8;
         border-radius: 8px;
@@ -134,12 +134,33 @@
         display: none;
       }
 
+      .debug-section {
+        display: grid;
+        gap: 8px;
+      }
+
+      .debug-section h2 {
+        margin: 0;
+        color: #1f2933;
+        font-size: 14px;
+      }
+
       .debug-row {
         display: grid;
         grid-template-columns: minmax(110px, 1fr) repeat(4, minmax(80px, auto));
         gap: 10px;
         align-items: center;
         font-size: 13px;
+      }
+
+      .debug-row-raw {
+        grid-template-columns: repeat(2, minmax(96px, 1fr));
+      }
+
+      @media (min-width: 900px) {
+        .debug-row-raw {
+          grid-template-columns: repeat(5, minmax(96px, 1fr));
+        }
       }
 
       .debug-row + .debug-row {
