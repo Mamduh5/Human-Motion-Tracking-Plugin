@@ -224,9 +224,12 @@ function createRawGestureDebugRow(debugEvent: GestureDebugEvent): HTMLElement {
     `confidence: ${gesture.confidence.toFixed(2)}`,
     `reason: ${formatMetadataValue(metadata.reason)}`,
     `orientation: ${formatMetadataValue(metadata.orientation)}`,
-    `wristY: ${formatMetadataValue(metadata.wristY)}`,
+    `handTopY: ${formatMetadataValue(metadata.handTopY)}`,
+    `handTop: ${formatMetadataValue(metadata.handTopLandmarkName)}`,
+    `yDelta: ${formatMetadataValue(metadata.yDelta)}`,
     `shoulderY: ${formatMetadataValue(metadata.shoulderY)}`,
     `visibility: ${formatMetadataValue(metadata.requiredVisibility)}`,
+    `sideResults: ${formatMetadataValue(metadata.sideResults)}`,
     `min: ${debugEvent.passedMinConfidence ? "pass" : "fail"}`,
     `stable: ${debugEvent.stabilityEmitted ? "emitted" : "held"}`,
   ];
@@ -269,10 +272,26 @@ function formatMetadataValue(value: unknown): string {
   }
 
   if (value && typeof value === "object") {
-    return Object.entries(value)
-      .map(([key, entryValue]) => `${key}:${String(entryValue)}`)
-      .join(", ");
+    return formatObjectValue(value);
   }
 
   return "n/a";
+}
+
+function formatObjectValue(value: object): string {
+  return Object.entries(value)
+    .map(([key, entryValue]) => `${key}:${formatNestedValue(entryValue)}`)
+    .join(", ");
+}
+
+function formatNestedValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => formatNestedValue(item)).join("|")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${formatObjectValue(value)}}`;
+  }
+
+  return String(value);
 }
