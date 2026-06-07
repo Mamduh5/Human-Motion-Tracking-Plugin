@@ -5,12 +5,14 @@ export type { CameraSource, CameraSourceOptions, VideoFrame, VideoFrameCallback 
 export { MotionTracker } from "./core/index";
 export type { MotionTrackerDependencies, MotionTrackerState, MotionTrackerStatus, ResolvedMotionTrackerConfig } from "./core/index";
 export {
+  SquatAnalyzer,
   detectArmsOpen,
   detectBothHandsUp,
   detectLeftHandUp,
   detectRightHandUp,
   detectStanding,
 } from "./detectors/index";
+export type { SquatAnalyzerOptions, SquatStage } from "./detectors/index";
 export { EventEmitter, MotionEvents } from "./events/index";
 export type { EventHandler, EventMap, MotionEventName, MotionEventPayload } from "./events/index";
 export {

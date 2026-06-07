@@ -5,4 +5,5 @@ export interface ExerciseResult {
   confidence: number;
   timestamp: number;
   warnings?: string[];
+  metadata?: Record<string, unknown>;
 }
