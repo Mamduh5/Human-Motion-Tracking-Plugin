@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Human Motion Tracking Plugin - Vanilla Example</title>
+    <style>
+      :root {
+        color: #1f2933;
+        background: #f5f7f8;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      main {
+        display: grid;
+        gap: 16px;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .stage {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px solid #ccd5df;
+        border-radius: 8px;
+        background: #111827;
+      }
+
+      video,
+      canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      video {
+        object-fit: cover;
+        transform: scaleX(-1);
+      }
+
+      canvas {
+        pointer-events: none;
+      }
+
+      .controls,
+      .readout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      button {
+        min-width: 96px;
+        border: 1px solid #a7b4c2;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #1f2933;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        padding: 10px 14px;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      #startButton {
+        background: #0f766e;
+        border-color: #0f766e;
+        color: #ffffff;
+      }
+
+      .readout {
+        justify-content: space-between;
+        padding: 12px 14px;
+        border: 1px solid #d8e0e8;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .label {
+        margin: 0;
+        color: #52606d;
+        font-size: 13px;
+      }
+
+      .value {
+        margin: 2px 0 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Human Motion Tracking Plugin</h1>
+
+      <section class="stage" aria-label="Camera preview with pose overlay">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </section>
+
+      <div class="controls">
+        <button id="startButton" type="button">Start</button>
+        <button id="stopButton" type="button" disabled>Stop</button>
+      </div>
+
+      <section class="readout" aria-live="polite">
+        <div>
+          <p class="label">Status</p>
+          <p id="status" class="value">Idle</p>
+        </div>
+        <div>
+          <p class="label">Active gestures</p>
+          <p id="gestures" class="value">None</p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
