@@ -122,6 +122,47 @@ const config: MotionTrackerConfig = {
 };
 ```
 
+## Calibration
+
+Calibration is optional. It samples the existing pose stream for a few seconds while the user stands front-facing with relaxed arms, then estimates user/camera-specific body scale and visibility. The result can improve gesture threshold scaling across close-up webcam views and smaller full-body views, but it does not replace MediaPipe pose accuracy or add MediaPipe hand tracking.
+
+```ts
+const tracker = new MotionTracker({
+  ...config,
+  calibration: {
+    enabled: true,
+    autoApply: true,
+    options: {
+      durationMs: 3000,
+      minSamples: 8,
+      pose: "neutral",
+      minVisibility: 0.5,
+    },
+  },
+});
+
+tracker.on("calibrationProgress", (progress) => {
+  console.log(progress.sampleCount, progress.quality, progress.warnings);
+});
+
+tracker.on("calibrationCompleted", (result) => {
+  console.log(result.metrics, result.recommendedThresholds);
+});
+
+await tracker.start();
+tracker.startCalibration();
+```
+
+You can also use the promise API:
+
+```ts
+await tracker.start();
+const result = await tracker.calibrate({ durationMs: 3000 });
+tracker.applyCalibration(result);
+```
+
+Calibration thresholds are resolved in this order: gesture precision preset, applied calibration recommendations, then explicit `gestures.thresholds`. User-provided thresholds win so existing app-specific tuning remains stable.
+
 ## React Adapter
 
 ```tsx
@@ -157,7 +198,15 @@ npm run dev:vanilla
 ```
 
 Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active gestures including `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, `armsUp`, `armsCrossed`, and `handsOnHips`.
-The example defaults to 640x480 at 10 FPS with the low-power performance profile. It also shows detections/sec, average detection time, skipped frames, raw gesture debug, and a “Use gesture stability” checkbox.
+The example defaults to 640x480 at 10 FPS with the low-power performance profile. It also shows detections/sec, average detection time, skipped frames, raw gesture debug, calibration controls, and a “Use gesture stability” checkbox.
+
+Manual calibration test:
+
+1. Click Start and wait for the camera preview.
+2. Click Calibrate.
+3. Stand front-facing with arms relaxed for 3 seconds.
+4. Confirm progress reaches 100%, quality and warnings update, and shoulder width, torso height, body scale, and average visibility display values.
+5. Raise a hand in both close-up and full-body framing and compare gesture behavior before and after calibration.
 
 `leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
 The arm-pose gestures use Pose Landmarker body landmarks only. They do not require or enable MediaPipe hand tracking.

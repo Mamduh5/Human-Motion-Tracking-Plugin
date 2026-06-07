@@ -113,6 +113,30 @@
         font-weight: 700;
       }
 
+      .value-small {
+        max-width: 280px;
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+
+      .hint {
+        margin: 4px 0 0;
+        color: #52606d;
+        font-size: 13px;
+      }
+
+      .calibration-readout {
+        align-items: flex-start;
+      }
+
+      .calibration-summary {
+        min-width: 220px;
+      }
+
+      .metric-readout {
+        justify-content: flex-start;
+      }
+
       .debug-toggle {
         display: inline-flex;
         gap: 8px;
@@ -198,7 +222,48 @@
       <div class="controls">
         <button id="startButton" type="button">Start</button>
         <button id="stopButton" type="button" disabled>Stop</button>
+        <button id="calibrateButton" type="button" disabled>Calibrate</button>
+        <button id="cancelCalibrationButton" type="button" disabled>Cancel calibration</button>
       </div>
+
+      <section class="readout calibration-readout" aria-live="polite">
+        <div class="calibration-summary">
+          <p class="label">Calibration</p>
+          <p id="calibrationStatus" class="value">Idle</p>
+          <p class="hint">Stand front-facing with arms relaxed for 3 seconds.</p>
+        </div>
+        <div>
+          <p class="label">Progress</p>
+          <p id="calibrationProgress" class="value">0%</p>
+        </div>
+        <div>
+          <p class="label">Quality</p>
+          <p id="calibrationQuality" class="value">n/a</p>
+        </div>
+        <div>
+          <p class="label">Warnings</p>
+          <p id="calibrationWarnings" class="value value-small">None</p>
+        </div>
+      </section>
+
+      <section class="readout metric-readout" aria-live="polite">
+        <div>
+          <p class="label">Shoulder width</p>
+          <p id="calibrationShoulderWidth" class="value">n/a</p>
+        </div>
+        <div>
+          <p class="label">Torso height</p>
+          <p id="calibrationTorsoHeight" class="value">n/a</p>
+        </div>
+        <div>
+          <p class="label">Body scale</p>
+          <p id="calibrationBodyScale" class="value">n/a</p>
+        </div>
+        <div>
+          <p class="label">Avg visibility</p>
+          <p id="calibrationAverageVisibility" class="value">n/a</p>
+        </div>
+      </section>
 
       <section class="readout" aria-live="polite">
         <div>

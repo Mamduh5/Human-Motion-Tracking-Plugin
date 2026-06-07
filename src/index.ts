@@ -1,5 +1,7 @@
 export const packageName = "human-motion-tracking-plugin";
 
+export { CalibrationManager } from "./calibration/index";
+export type { CalibrationManagerDependencies, CalibrationSampleMetrics } from "./calibration/index";
 export { CameraManager, VideoFrameProvider } from "./camera/index";
 export type { CameraSource, CameraSourceOptions, VideoFrame, VideoFrameCallback } from "./camera/index";
 export { MotionTracker } from "./core/index";

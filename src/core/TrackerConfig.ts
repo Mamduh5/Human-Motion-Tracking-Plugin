@@ -21,6 +21,7 @@ export type ResolvedMotionTrackerConfig = MotionTrackerConfig & {
   gestures: GestureConfig & {
     precision: NonNullable<GestureConfig["precision"]>;
     thresholds: GestureThresholds;
+    thresholdOverrides: Partial<GestureThresholds>;
     stability: Required<GestureStabilityConfig>;
   };
 };
@@ -63,6 +64,7 @@ function resolveGestureConfig(gestures: GestureConfig): ResolvedMotionTrackerCon
     ...gestures,
     precision: gestures.precision ?? "balanced",
     thresholds: resolveGestureThresholds(gestures),
+    thresholdOverrides: gestures.thresholds ?? {},
     stability: {
       enabled: stability.enabled ?? true,
       activeFrames,

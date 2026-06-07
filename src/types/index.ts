@@ -1,4 +1,16 @@
 export type {
+  CalibrationCancelledEvent,
+  CalibrationFailedEvent,
+  CalibrationMetrics,
+  CalibrationOptions,
+  CalibrationPose,
+  CalibrationProgressEvent,
+  CalibrationQuality,
+  CalibrationResult,
+  CalibrationStartedEvent,
+  CalibrationStatus,
+} from "./calibration";
+export type {
   TrackerMode,
   CameraConfig,
   ExerciseConfig,

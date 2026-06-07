@@ -181,6 +181,77 @@ const config: MotionTrackerConfig = {
 
 Use `thresholds` for targeted overrides after choosing a preset. For example, lowering `handUpYMargin` makes hand-up gestures activate with less vertical distance between hand and shoulder.
 
+## Calibration
+
+Calibration is optional. It uses the same Pose Landmarker output as normal tracking and does not add MediaPipe hand tracking. During calibration, ask the user to stand front-facing with arms relaxed for about 3 seconds. The SDK collects pose samples, computes body scale and visibility metrics, and recommends conservative gesture thresholds for that user, camera, and framing.
+
+Calibration can help close-up and full-body views use better scaled thresholds. It cannot fix low MediaPipe pose accuracy, bad lighting, occluded joints, or a camera angle where the body is not visible enough.
+
+```ts
+const tracker = new MotionTracker({
+  ...config,
+  gestures: {
+    enabled: true,
+    names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp", "armsOpen", "handsOnHips"],
+    precision: "balanced",
+  },
+  calibration: {
+    enabled: true,
+    autoApply: true,
+    options: {
+      durationMs: 3000,
+      minSamples: 8,
+      pose: "neutral",
+      minVisibility: 0.5,
+    },
+  },
+});
+
+tracker.on("calibrationStarted", () => {
+  console.log("calibration started");
+});
+
+tracker.on("calibrationProgress", (progress) => {
+  console.log(progress.elapsedMs, progress.sampleCount, progress.quality, progress.warnings);
+});
+
+tracker.on("calibrationCompleted", (result) => {
+  console.log(result.metrics);
+  console.log(result.recommendedThresholds);
+});
+
+tracker.on("calibrationFailed", (event) => {
+  console.error(event.message, event.warnings);
+});
+
+await tracker.start();
+tracker.startCalibration();
+```
+
+The promise API is useful for button flows:
+
+```ts
+await tracker.start();
+
+try {
+  const result = await tracker.calibrate({ durationMs: 3000 });
+  tracker.applyCalibration(result);
+} catch (error) {
+  console.error(error);
+}
+```
+
+Available calibration methods:
+
+- `calibrate(options?)`: starts calibration and resolves with a completed result.
+- `startCalibration(options?)`: starts sampling from the existing tracking loop.
+- `cancelCalibration()`: cancels an active calibration.
+- `getCalibration()`: returns the last completed or applied result.
+- `applyCalibration(result)`: applies recommended thresholds.
+- `clearCalibration()`: removes applied calibration thresholds.
+
+The tracker must be running before calibration starts. If `calibration.autoApply` is true, completed recommendations are applied automatically. Thresholds resolve in this order: gesture precision preset, applied calibration recommendations, then explicit `gestures.thresholds`. User thresholds win.
+
 ## Using an Existing Video Element
 
 If your UI already owns the preview element, pass a `CameraManager` dependency with that element:
@@ -450,12 +521,15 @@ Then:
 
 1. Allow camera access when the browser prompts.
 2. Click Start.
-3. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
-4. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
-5. Click Stop to stop the stream.
+3. Click Calibrate and stand front-facing with arms relaxed for 3 seconds.
+4. Confirm progress reaches 100%, quality and warnings update, and shoulder width, torso height, body scale, and average visibility display values.
+5. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
+6. Try close-up and full-body framing after calibration to compare gesture threshold scaling.
+7. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
+8. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
-By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering.
+By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes.
 
 ## Useful Scripts
 

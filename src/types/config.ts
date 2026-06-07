@@ -1,4 +1,5 @@
 import type { GesturePrecisionProfile, GestureThresholds } from "../detectors/gestures/GestureThresholds";
+import type { CalibrationOptions } from "./calibration";
 
 export type TrackerMode = "pose" | "holistic";
 
@@ -63,4 +64,9 @@ export interface MotionTrackerConfig {
   minConfidence: number;
   smoothing: SmoothingConfig;
   performance?: PerformanceConfig;
+  calibration?: {
+    enabled?: boolean;
+    autoApply?: boolean;
+    options?: CalibrationOptions;
+  };
 }

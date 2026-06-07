@@ -12,8 +12,9 @@
 - Starts and stops the camera source.
 - Initializes and disposes the landmark tracker.
 - Schedules the frame loop with `requestAnimationFrame` and throttles pose detection by configured target FPS.
-- Emits `pose`, `gesture`, `exercise`, `started`, `stopped`, and `error` events.
+- Emits `pose`, `gesture`, `exercise`, calibration, `started`, `stopped`, and `error` events.
 - Dispatches events to registered plugins.
+- Applies optional calibration recommendations to gesture thresholds.
 
 The public lifecycle is:
 
@@ -96,6 +97,28 @@ The squat analyzer tracks stage transitions and repetition count from visible hi
 `leftHandUp`, `rightHandUp`, and `bothHandsUp` use anatomical left/right labels and require a mostly front-facing body. `handUp` is the side-view-safe option for workout positions where either visible wrist above its matching shoulder should count.
 The arm-pose gestures use Pose Landmarker body landmarks only. They do not require MediaPipe hand tracking.
 
+### Calibration
+
+`CalibrationManager` collects pose samples from the existing `MotionTracker` frame loop. It measures visible shoulders, hips, elbows, and wrists, then summarizes median body metrics:
+
+- shoulder width
+- hip width
+- torso height
+- body scale
+- left and right arm length
+- average visibility
+- front-facing score
+
+Calibration is optional and pose-only. It improves threshold scaling for close-up and full-body camera views, but it does not replace MediaPipe pose accuracy. Low visibility, missing shoulders, missing hips, side-facing poses, and too few usable samples are reported as warnings.
+
+When calibration is applied, gesture thresholds resolve in this order:
+
+1. Gesture precision preset.
+2. Applied calibration recommendations.
+3. Explicit `gestures.thresholds`.
+
+Explicit user thresholds win over calibration so app-specific tuning is preserved.
+
 ### Event System
 
 `MotionTracker` uses a typed event emitter. Consumers subscribe with `on` and remove handlers with `off`.
@@ -109,6 +132,14 @@ tracker.off("gesture", handler);
 ```
 
 Events are synchronous within the frame processing path. Keep handlers lightweight. If you need expensive work, schedule it outside the frame loop.
+
+Calibration event names are:
+
+- `calibrationStarted`
+- `calibrationProgress`
+- `calibrationCompleted`
+- `calibrationFailed`
+- `calibrationCancelled`
 
 ### Plugin Layer
 
@@ -142,10 +173,11 @@ The live tracking flow is:
 7. Each animation frame updates loop state and checks the performance throttle.
 8. When enough time has passed for `performance.targetFps`, `landmarkTracker.detect(video, timestamp)` runs.
 9. A valid pose emits `pose`.
-10. Enabled gesture detectors emit `gesture`.
-11. Enabled exercise analyzers emit `exercise`.
-12. Plugins receive each relevant event and may emit derived events.
-13. App calls `stop()`, which cancels the frame loop, stops camera tracks, disposes MediaPipe, and emits `stopped`.
+10. If calibration is collecting, the pose is sampled and calibration progress or completion events may emit.
+11. Enabled gesture detectors emit `gesture` using precision, calibration, and user threshold resolution.
+12. Enabled exercise analyzers emit `exercise`.
+13. Plugins receive each relevant event and may emit derived events.
+14. App calls `stop()`, which cancels the frame loop, stops camera tracks, disposes MediaPipe, and emits `stopped`.
 
 ## Configuration Shape
 
@@ -195,6 +227,16 @@ interface MotionTrackerConfig {
     profile?: "low-power" | "balanced" | "quality";
     adaptive?: boolean;
   };
+  calibration?: {
+    enabled?: boolean;
+    autoApply?: boolean;
+    options?: {
+      durationMs?: number;
+      minSamples?: number;
+      pose?: "neutral";
+      minVisibility?: number;
+    };
+  };
 }
 ```
 
@@ -202,6 +244,7 @@ For `mode: "pose"`, both `pose.modelAssetPath` and `pose.wasmAssetPath` are requ
 Performance defaults to the balanced profile at 15 FPS. The low-power profile defaults to 10 FPS, and the quality profile defaults to 30 FPS.
 Gesture stability defaults to enabled with three active frames and three inactive frames.
 Gesture precision defaults to balanced. The loose preset is more sensitive; the strict preset reduces false positives.
+Calibration is optional. `autoApply` applies completed recommended thresholds automatically; explicit `gestures.thresholds` still win.
 
 ## Browser-Only Camera Requirements
 

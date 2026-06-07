@@ -1,3 +1,10 @@
+import type {
+  CalibrationCancelledEvent,
+  CalibrationFailedEvent,
+  CalibrationProgressEvent,
+  CalibrationResult,
+  CalibrationStartedEvent,
+} from "./calibration";
 import type { ExerciseResult } from "./exercises";
 import type { GestureResult } from "./gestures";
 import type { PoseResult } from "./landmarks";
@@ -33,6 +40,11 @@ export interface MotionTrackerEventMap {
   error: TrackerErrorEvent;
   started: TrackerLifecycleEvent;
   stopped: TrackerLifecycleEvent;
+  calibrationStarted: CalibrationStartedEvent;
+  calibrationProgress: CalibrationProgressEvent;
+  calibrationCompleted: CalibrationResult;
+  calibrationFailed: CalibrationFailedEvent;
+  calibrationCancelled: CalibrationCancelledEvent;
 }
 
 export type MotionTrackerEventName = keyof MotionTrackerEventMap;

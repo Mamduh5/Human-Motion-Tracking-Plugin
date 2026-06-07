@@ -1,5 +1,6 @@
 import type { CameraSource } from "../camera";
 import { CameraManager } from "../camera";
+import { CalibrationManager } from "../calibration";
 import {
   SquatAnalyzer,
   detectArmsCrossed,
@@ -15,11 +16,14 @@ import {
   detectRightElbowBent,
   detectRightHandUp,
   detectStanding,
+  resolveGestureThresholds,
 } from "../detectors";
 import { EventEmitter } from "../events";
 import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugins";
 import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
 import type {
+  CalibrationOptions,
+  CalibrationResult,
   ExerciseResult,
   GestureDebugEvent,
   GestureResult,
@@ -80,10 +84,13 @@ export class MotionTracker {
   private readonly detectionIntervalMs: number;
   private readonly pluginManager: PluginManager;
   private readonly gestureStabilityFilter: GestureStabilityFilter;
+  private readonly calibrationManager: CalibrationManager;
   private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
   private videoElement?: HTMLVideoElement;
+  private calibrationResult?: CalibrationResult;
+  private appliedCalibration?: CalibrationResult;
   private lastDetectionTimestamp?: number;
   private averageDetectionMs?: number;
   private framesSkipped = 0;
@@ -108,6 +115,7 @@ export class MotionTracker {
       activeFrameThreshold: this.config.gestures.stability.activeFrames,
       inactiveFrameThreshold: this.config.gestures.stability.inactiveFrames,
     });
+    this.calibrationManager = new CalibrationManager({ now: this.now });
     this.pluginManager = new PluginManager(this.createPluginApi());
   }
 
@@ -148,6 +156,10 @@ export class MotionTracker {
     if (this.animationFrameId !== undefined) {
       this.cancelFrame(this.animationFrameId);
       this.animationFrameId = undefined;
+    }
+
+    if (this.calibrationManager.getStatus() === "collecting") {
+      this.cancelCalibration();
     }
 
     const stoppedAt = this.now();
@@ -197,6 +209,80 @@ export class MotionTracker {
     return this.pluginManager.unregister(name);
   }
 
+  calibrate(options?: CalibrationOptions): Promise<CalibrationResult> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        this.off("calibrationCompleted", handleCompleted);
+        this.off("calibrationFailed", handleFailed);
+        this.off("calibrationCancelled", handleCancelled);
+      };
+      const handleCompleted = (result: CalibrationResult) => {
+        cleanup();
+        resolve(result);
+      };
+      const handleFailed = (event: MotionTrackerEventMap["calibrationFailed"]) => {
+        cleanup();
+        reject(new Error(event.message));
+      };
+      const handleCancelled = () => {
+        cleanup();
+        reject(new Error("Calibration was cancelled."));
+      };
+
+      this.on("calibrationCompleted", handleCompleted);
+      this.on("calibrationFailed", handleFailed);
+      this.on("calibrationCancelled", handleCancelled);
+
+      try {
+        this.startCalibration(options);
+      } catch (error) {
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  startCalibration(options: CalibrationOptions = {}): void {
+    if (this.config.calibration?.enabled === false) {
+      throw new Error("Calibration is disabled by MotionTrackerConfig.calibration.enabled.");
+    }
+
+    if (this.state.status !== "running") {
+      throw new Error("MotionTracker must be running before calibration starts.");
+    }
+
+    const startedEvent = this.calibrationManager.start({
+      ...this.config.calibration?.options,
+      ...options,
+    });
+
+    this.events.emit("calibrationStarted", startedEvent);
+  }
+
+  cancelCalibration(): void {
+    const cancelledEvent = this.calibrationManager.cancel();
+
+    if (cancelledEvent) {
+      this.events.emit("calibrationCancelled", cancelledEvent);
+    }
+  }
+
+  getCalibration(): CalibrationResult | undefined {
+    return this.calibrationResult;
+  }
+
+  applyCalibration(result: CalibrationResult): void {
+    this.calibrationResult = result;
+    this.appliedCalibration = result;
+    this.gestureStabilityFilter.reset();
+  }
+
+  clearCalibration(): void {
+    this.calibrationResult = undefined;
+    this.appliedCalibration = undefined;
+    this.gestureStabilityFilter.reset();
+  }
+
   private scheduleNextFrame(): void {
     this.animationFrameId = this.requestFrame((timestamp) => {
       this.processFrame(timestamp);
@@ -231,6 +317,7 @@ export class MotionTracker {
       if (pose && pose.confidence >= this.config.minConfidence) {
         this.events.emit("pose", pose);
         this.pluginManager.notifyPose(pose);
+        this.collectCalibrationSample(pose);
         this.emitGestures(pose);
         this.emitExercises(pose);
       }
@@ -307,7 +394,7 @@ export class MotionTracker {
         continue;
       }
 
-      const gesture = detector(pose, this.config.gestures.thresholds);
+      const gesture = detector(pose, this.getGestureThresholds());
       const minConfidence = this.config.gestures.minConfidence ?? 0;
       const passedMinConfidence = gesture.confidence >= minConfidence;
       let stableGesture: GestureResult | undefined;
@@ -375,6 +462,59 @@ export class MotionTracker {
     for (const analyzer of this.exerciseAnalyzers.values()) {
       analyzer.reset?.();
     }
+  }
+
+  private collectCalibrationSample(pose: PoseResult): void {
+    if (this.calibrationManager.getStatus() !== "collecting") {
+      return;
+    }
+
+    const progressEvent = this.calibrationManager.addPoseSample(pose);
+
+    if (progressEvent) {
+      this.events.emit("calibrationProgress", progressEvent);
+    }
+
+    if (this.calibrationManager.shouldComplete()) {
+      this.completeCalibration();
+    }
+  }
+
+  private completeCalibration(): void {
+    const progressEvent = this.calibrationManager.getProgress();
+
+    try {
+      const result = this.calibrationManager.complete();
+
+      this.calibrationResult = result;
+
+      if (this.config.calibration?.autoApply) {
+        this.applyCalibration(result);
+      }
+
+      this.events.emit("calibrationCompleted", result);
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+
+      this.events.emit("calibrationFailed", {
+        status: "failed",
+        timestamp: this.now(),
+        sampleCount: progressEvent?.sampleCount ?? 0,
+        message: normalizedError.message,
+        warnings: progressEvent?.warnings,
+      });
+    }
+  }
+
+  private getGestureThresholds(): ResolvedMotionTrackerConfig["gestures"]["thresholds"] {
+    // Threshold resolution order is precision preset, applied calibration, then explicit user thresholds.
+    return resolveGestureThresholds({
+      precision: this.config.gestures.precision,
+      thresholds: {
+        ...this.appliedCalibration?.recommendedThresholds,
+        ...this.config.gestures.thresholdOverrides,
+      },
+    });
   }
 
   private emitGestureEvent(gesture: GestureResult): void {

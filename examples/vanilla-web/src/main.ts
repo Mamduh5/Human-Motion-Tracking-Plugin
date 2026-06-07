@@ -1,6 +1,9 @@
 import {
   CameraManager,
   MotionTracker,
+  type CalibrationMetrics,
+  type CalibrationProgressEvent,
+  type CalibrationResult,
   type GestureDebugEvent,
   type GestureResult,
   type MotionTrackerConfig,
@@ -12,8 +15,18 @@ const video = document.querySelector<HTMLVideoElement>("#video");
 const overlay = document.querySelector<HTMLCanvasElement>("#overlay");
 const startButton = document.querySelector<HTMLButtonElement>("#startButton");
 const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
+const calibrateButton = document.querySelector<HTMLButtonElement>("#calibrateButton");
+const cancelCalibrationButton = document.querySelector<HTMLButtonElement>("#cancelCalibrationButton");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const gesturesElement = document.querySelector<HTMLElement>("#gestures");
+const calibrationStatusElement = document.querySelector<HTMLElement>("#calibrationStatus");
+const calibrationProgressElement = document.querySelector<HTMLElement>("#calibrationProgress");
+const calibrationQualityElement = document.querySelector<HTMLElement>("#calibrationQuality");
+const calibrationWarningsElement = document.querySelector<HTMLElement>("#calibrationWarnings");
+const calibrationShoulderWidthElement = document.querySelector<HTMLElement>("#calibrationShoulderWidth");
+const calibrationTorsoHeightElement = document.querySelector<HTMLElement>("#calibrationTorsoHeight");
+const calibrationBodyScaleElement = document.querySelector<HTMLElement>("#calibrationBodyScale");
+const calibrationAverageVisibilityElement = document.querySelector<HTMLElement>("#calibrationAverageVisibility");
 const detectionsPerSecondElement = document.querySelector<HTMLElement>("#detectionsPerSecond");
 const averageDetectionMsElement = document.querySelector<HTMLElement>("#averageDetectionMs");
 const framesSkippedElement = document.querySelector<HTMLElement>("#framesSkipped");
@@ -28,8 +41,18 @@ if (
   !overlay ||
   !startButton ||
   !stopButton ||
+  !calibrateButton ||
+  !cancelCalibrationButton ||
   !statusElement ||
   !gesturesElement ||
+  !calibrationStatusElement ||
+  !calibrationProgressElement ||
+  !calibrationQualityElement ||
+  !calibrationWarningsElement ||
+  !calibrationShoulderWidthElement ||
+  !calibrationTorsoHeightElement ||
+  !calibrationBodyScaleElement ||
+  !calibrationAverageVisibilityElement ||
   !detectionsPerSecondElement ||
   !averageDetectionMsElement ||
   !framesSkippedElement ||
@@ -99,6 +122,16 @@ function createTrackerConfig(): MotionTrackerConfig {
       targetFps: 10,
       adaptive: false,
     },
+    calibration: {
+      enabled: true,
+      autoApply: true,
+      options: {
+        durationMs: 3000,
+        minSamples: 8,
+        pose: "neutral",
+        minVisibility: 0.5,
+      },
+    },
   };
 }
 
@@ -108,6 +141,14 @@ startButton.addEventListener("click", () => {
 
 stopButton.addEventListener("click", () => {
   stopTracking();
+});
+
+calibrateButton.addEventListener("click", () => {
+  startCalibration();
+});
+
+cancelCalibrationButton.addEventListener("click", () => {
+  tracker?.cancelCalibration();
 });
 
 debugToggle.addEventListener("change", () => {
@@ -122,6 +163,7 @@ async function startTracking(): Promise<void> {
   updateGestureText();
   updateGestureDebug();
   updatePerformanceReadout();
+  resetCalibrationReadout();
   const config = createTrackerConfig();
 
   tracker = new MotionTracker(config, {
@@ -135,6 +177,8 @@ async function startTracking(): Promise<void> {
     statusElement.textContent = "Running";
     startButton.disabled = true;
     stopButton.disabled = false;
+    calibrateButton.disabled = false;
+    cancelCalibrationButton.disabled = true;
     stabilityToggle.disabled = true;
     precisionSelect.disabled = true;
     updatePerformanceReadout();
@@ -143,6 +187,8 @@ async function startTracking(): Promise<void> {
     statusElement.textContent = "Stopped";
     startButton.disabled = false;
     stopButton.disabled = true;
+    calibrateButton.disabled = true;
+    cancelCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
     activeGestures.clear();
@@ -151,6 +197,7 @@ async function startTracking(): Promise<void> {
     updateGestureText();
     updateGestureDebug();
     updatePerformanceReadout();
+    resetCalibrationReadout();
     clearPose(overlay);
   });
   tracker.on("pose", (pose: PoseResult) => {
@@ -175,10 +222,47 @@ async function startTracking(): Promise<void> {
     updateGestureDebug();
     updatePerformanceReadout();
   });
+  tracker.on("calibrationStarted", (event) => {
+    calibrationStatusElement.textContent = "Collecting";
+    calibrateButton.disabled = true;
+    cancelCalibrationButton.disabled = false;
+    updateCalibrationReadout({
+      status: "collecting",
+      elapsedMs: 0,
+      durationMs: event.durationMs,
+      sampleCount: 0,
+      quality: "poor",
+    });
+  });
+  tracker.on("calibrationProgress", (progress: CalibrationProgressEvent) => {
+    updateCalibrationReadout(progress);
+  });
+  tracker.on("calibrationCompleted", (result: CalibrationResult) => {
+    calibrationStatusElement.textContent = "Completed";
+    calibrationProgressElement.textContent = "100%";
+    calibrationQualityElement.textContent = result.quality;
+    calibrationWarningsElement.textContent = formatWarnings(result.warnings);
+    updateCalibrationMetrics(result.metrics);
+    calibrateButton.disabled = false;
+    cancelCalibrationButton.disabled = true;
+  });
+  tracker.on("calibrationFailed", (event) => {
+    calibrationStatusElement.textContent = event.message;
+    calibrationWarningsElement.textContent = formatWarnings(event.warnings);
+    calibrateButton.disabled = false;
+    cancelCalibrationButton.disabled = true;
+  });
+  tracker.on("calibrationCancelled", () => {
+    calibrationStatusElement.textContent = "Cancelled";
+    calibrateButton.disabled = false;
+    cancelCalibrationButton.disabled = true;
+  });
   tracker.on("error", (error) => {
     statusElement.textContent = error.message;
     startButton.disabled = false;
     stopButton.disabled = true;
+    calibrateButton.disabled = true;
+    cancelCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
   });
@@ -189,6 +273,8 @@ async function startTracking(): Promise<void> {
     statusElement.textContent = error instanceof Error ? error.message : String(error);
     startButton.disabled = false;
     stopButton.disabled = true;
+    calibrateButton.disabled = true;
+    cancelCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
     precisionSelect.disabled = false;
   }
@@ -203,6 +289,21 @@ function setControlsStarting(): void {
   statusElement.textContent = "Starting";
   startButton.disabled = true;
   stopButton.disabled = true;
+  calibrateButton.disabled = true;
+  cancelCalibrationButton.disabled = true;
+}
+
+function startCalibration(): void {
+  try {
+    tracker?.startCalibration({
+      durationMs: 3000,
+      minSamples: 8,
+      pose: "neutral",
+      minVisibility: 0.5,
+    });
+  } catch (error) {
+    calibrationStatusElement.textContent = error instanceof Error ? error.message : String(error);
+  }
 }
 
 function updateGestureText(): void {
@@ -218,6 +319,30 @@ function updatePerformanceReadout(): void {
   averageDetectionMsElement.textContent = formatNumber(state?.averageDetectionMs, "ms");
   framesSkippedElement.textContent = String(state?.framesSkipped ?? 0);
   precisionElement.textContent = precisionSelect.value;
+}
+
+function updateCalibrationReadout(progress: CalibrationProgressEvent): void {
+  const percent = progress.durationMs > 0 ? Math.min(100, (progress.elapsedMs / progress.durationMs) * 100) : 100;
+
+  calibrationProgressElement.textContent = `${Math.round(percent)}%`;
+  calibrationQualityElement.textContent = progress.quality;
+  calibrationWarningsElement.textContent = formatWarnings(progress.warnings);
+  updateCalibrationMetrics(progress.metrics);
+}
+
+function updateCalibrationMetrics(metrics: Partial<CalibrationMetrics> | undefined): void {
+  calibrationShoulderWidthElement.textContent = formatMetric(metrics?.shoulderWidth);
+  calibrationTorsoHeightElement.textContent = formatMetric(metrics?.torsoHeight);
+  calibrationBodyScaleElement.textContent = formatMetric(metrics?.bodyScale);
+  calibrationAverageVisibilityElement.textContent = formatMetric(metrics?.averageVisibility);
+}
+
+function resetCalibrationReadout(): void {
+  calibrationStatusElement.textContent = "Idle";
+  calibrationProgressElement.textContent = "0%";
+  calibrationQualityElement.textContent = "n/a";
+  calibrationWarningsElement.textContent = "None";
+  updateCalibrationMetrics(undefined);
 }
 
 function updateGestureDebug(): void {
@@ -335,6 +460,14 @@ function formatNumber(value: number | undefined, suffix = ""): string {
   }
 
   return suffix ? `${value.toFixed(1)} ${suffix}` : value.toFixed(1);
+}
+
+function formatMetric(value: number | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(3) : "n/a";
+}
+
+function formatWarnings(warnings: string[] | undefined): string {
+  return warnings && warnings.length > 0 ? warnings.join(", ") : "None";
 }
 
 function formatObjectValue(value: object): string {

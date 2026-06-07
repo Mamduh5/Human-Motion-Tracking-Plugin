@@ -4,7 +4,7 @@ import { MotionTracker, resolveMotionTrackerConfig } from "../../src/core";
 import type { CameraSource } from "../../src/camera";
 import type { MotionPlugin } from "../../src/plugins";
 import type { MotionLandmarkTracker } from "../../src/trackers";
-import type { Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
+import type { CalibrationResult, Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
 
 describe("MotionTracker", () => {
   it("defaults performance config to the balanced profile", () => {
@@ -438,6 +438,119 @@ describe("MotionTracker", () => {
         }),
       }),
     );
+  });
+
+  it("emits calibration started, progress, and completed events", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createCalibrationPose()]),
+    });
+    const startedHandler = vi.fn();
+    const progressHandler = vi.fn();
+    const completedHandler = vi.fn();
+
+    tracker.on("calibrationStarted", startedHandler);
+    tracker.on("calibrationProgress", progressHandler);
+    tracker.on("calibrationCompleted", completedHandler);
+
+    await tracker.start();
+    tracker.startCalibration({ durationMs: 0, minSamples: 1 });
+    raf.flushFrame(1);
+
+    expect(startedHandler).toHaveBeenCalledWith(expect.objectContaining({ status: "collecting", durationMs: 0 }));
+    expect(progressHandler).toHaveBeenCalledWith(expect.objectContaining({ status: "collecting", sampleCount: 1 }));
+    expect(completedHandler).toHaveBeenCalledWith(expect.objectContaining({ status: "completed", sampleCount: 1 }));
+    expect(tracker.getCalibration()).toMatchObject({ status: "completed", sampleCount: 1 });
+  });
+
+  it("applyCalibration changes resolved gesture thresholds", async () => {
+    const pose = createPose([
+      ...createCalibrationTorso(),
+      landmark("leftWrist", 15, 0.3, 0.375),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.applyCalibration(createCalibrationResult({ handUpYMargin: 0.015 }));
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gesture: expect.objectContaining({
+          metadata: expect.objectContaining({ yMargin: 0.015 }),
+        }),
+      }),
+    );
+  });
+
+  it("keeps explicit user thresholds above applied calibration thresholds", async () => {
+    const pose = createPose([
+      ...createCalibrationTorso(),
+      landmark("leftWrist", 15, 0.3, 0.35),
+    ]);
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([pose]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          thresholds: {
+            handUpYMargin: 0.06,
+          },
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.applyCalibration(createCalibrationResult({ handUpYMargin: 0.015 }));
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: false }));
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gesture: expect.objectContaining({
+          metadata: expect.objectContaining({ yMargin: 0.06 }),
+        }),
+      }),
+    );
+  });
+
+  it("cancelCalibration emits calibrationCancelled", async () => {
+    const { tracker } = createMotionTracker();
+    const cancelledHandler = vi.fn();
+
+    tracker.on("calibrationCancelled", cancelledHandler);
+    await tracker.start();
+    tracker.startCalibration({ durationMs: 1000, minSamples: 1 });
+    tracker.cancelCalibration();
+
+    expect(cancelledHandler).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled", sampleCount: 0 }));
   });
 
   it("emits active false after three stable inactive frames following an active gesture", async () => {
@@ -940,6 +1053,43 @@ function createArmGesturePose(): PoseResult {
     landmark("leftHip", 23, 0.35, 0.7),
     landmark("rightHip", 24, 0.65, 0.7),
   ]);
+}
+
+function createCalibrationPose(): PoseResult {
+  return createPose([
+    ...createCalibrationTorso(),
+    landmark("leftElbow", 13, 0.2, 0.4),
+    landmark("rightElbow", 14, 0.8, 0.4),
+    landmark("leftWrist", 15, 0.1, 0.4),
+    landmark("rightWrist", 16, 0.9, 0.4),
+  ]);
+}
+
+function createCalibrationTorso(): Landmark[] {
+  return [
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+    landmark("leftHip", 23, 0.35, 0.7),
+    landmark("rightHip", 24, 0.65, 0.7),
+  ];
+}
+
+function createCalibrationResult(recommendedThresholds: CalibrationResult["recommendedThresholds"]): CalibrationResult {
+  return {
+    status: "completed",
+    timestamp: 1,
+    sampleCount: 10,
+    quality: "good",
+    metrics: {
+      shoulderWidth: 0.4,
+      hipWidth: 0.3,
+      torsoHeight: 0.3,
+      bodyScale: 0.35,
+      averageVisibility: 1,
+      frontFacingScore: 1.3,
+    },
+    recommendedThresholds,
+  };
 }
 
 function landmark(name: string, index: number, x: number, y: number, visibility = 1): Landmark {
