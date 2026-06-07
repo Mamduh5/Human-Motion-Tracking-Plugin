@@ -1,6 +1,7 @@
 import type { CameraSource } from "../camera";
 import { CameraManager } from "../camera";
 import {
+  SquatAnalyzer,
   detectArmsOpen,
   detectBothHandsUp,
   detectLeftHandUp,
@@ -9,12 +10,16 @@ import {
 } from "../detectors";
 import { EventEmitter } from "../events";
 import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
-import type { GestureResult, MotionTrackerConfig, MotionTrackerEventMap, PoseResult, TrackerErrorEvent } from "../types";
+import type { ExerciseResult, GestureResult, MotionTrackerConfig, MotionTrackerEventMap, PoseResult, TrackerErrorEvent } from "../types";
 import { getTimestamp } from "../utils";
 import { resolveMotionTrackerConfig, type ResolvedMotionTrackerConfig } from "./TrackerConfig";
 import { createInitialTrackerState, type MotionTrackerState } from "./TrackerState";
 
 type GestureDetector = (pose: PoseResult) => GestureResult;
+type ExerciseAnalyzer = {
+  analyze(pose: PoseResult): ExerciseResult;
+  reset?(): void;
+};
 type RequestAnimationFrame = (callback: FrameRequestCallback) => number;
 type CancelAnimationFrame = (handle: number) => void;
 
@@ -34,6 +39,10 @@ const GESTURE_DETECTORS: Record<string, GestureDetector> = {
   standing: detectStanding,
 };
 
+const EXERCISE_ANALYZERS: Record<string, () => ExerciseAnalyzer> = {
+  squat: () => new SquatAnalyzer(),
+};
+
 export class MotionTracker {
   private readonly config: ResolvedMotionTrackerConfig;
   private readonly events = new EventEmitter<MotionTrackerEventMap>();
@@ -42,6 +51,7 @@ export class MotionTracker {
   private readonly requestFrame: RequestAnimationFrame;
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
+  private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
   private videoElement?: HTMLVideoElement;
@@ -69,6 +79,7 @@ export class MotionTracker {
       status: "starting",
       startedAt: this.now(),
     };
+    this.resetExerciseAnalyzers();
 
     try {
       await this.landmarkTracker.initialize();
@@ -148,6 +159,7 @@ export class MotionTracker {
       if (pose && pose.confidence >= this.config.minConfidence) {
         this.events.emit("pose", pose);
         this.emitGestures(pose);
+        this.emitExercises(pose);
       }
 
       if (this.state.status === "running") {
@@ -178,6 +190,53 @@ export class MotionTracker {
       if (gesture.confidence >= (this.config.gestures.minConfidence ?? 0)) {
         this.events.emit("gesture", gesture);
       }
+    }
+  }
+
+  private emitExercises(pose: PoseResult): void {
+    if (!this.config.exercises.enabled) {
+      return;
+    }
+
+    const analyzerNames = this.config.exercises.names ?? Object.keys(EXERCISE_ANALYZERS);
+
+    for (const analyzerName of analyzerNames) {
+      const analyzer = this.getExerciseAnalyzer(analyzerName);
+
+      if (!analyzer) {
+        continue;
+      }
+
+      const exercise = analyzer.analyze(pose);
+
+      if (exercise.confidence >= (this.config.exercises.minConfidence ?? 0)) {
+        this.events.emit("exercise", exercise);
+      }
+    }
+  }
+
+  private getExerciseAnalyzer(name: string): ExerciseAnalyzer | undefined {
+    const existingAnalyzer = this.exerciseAnalyzers.get(name);
+
+    if (existingAnalyzer) {
+      return existingAnalyzer;
+    }
+
+    const createAnalyzer = EXERCISE_ANALYZERS[name];
+
+    if (!createAnalyzer) {
+      return undefined;
+    }
+
+    const analyzer = createAnalyzer();
+    this.exerciseAnalyzers.set(name, analyzer);
+
+    return analyzer;
+  }
+
+  private resetExerciseAnalyzers(): void {
+    for (const analyzer of this.exerciseAnalyzers.values()) {
+      analyzer.reset?.();
     }
   }
 

@@ -51,6 +51,32 @@ describe("MotionTracker", () => {
     expect(tracker.getState()).toMatchObject({ status: "running", lastFrameTimestamp: 1234 });
   });
 
+  it("emits exercise events when exercises are enabled", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([
+        createPose(createSquatDownLegs()),
+        createPose(createSquatUpLegs()),
+      ]),
+      config: {
+        exercises: {
+          enabled: true,
+          names: ["squat"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const exerciseHandler = vi.fn();
+
+    tracker.on("exercise", exerciseHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+
+    expect(exerciseHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "squat", stage: "down", reps: 0 }));
+    expect(exerciseHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "squat", stage: "up", reps: 1 }));
+  });
+
+
   it("removes event handlers with off", async () => {
     const { tracker, raf } = createMotionTracker({ landmarkTracker: createLandmarkTrackerMock(createPose([])) });
     const poseHandler = vi.fn();
@@ -99,8 +125,9 @@ interface CreateMotionTrackerOptions {
   landmarkTracker?: MotionLandmarkTracker;
 }
 
-type PartialMotionTrackerConfig = Partial<Omit<MotionTrackerConfig, "gestures">> & {
+type PartialMotionTrackerConfig = Partial<Omit<MotionTrackerConfig, "gestures" | "exercises">> & {
   gestures?: Partial<MotionTrackerConfig["gestures"]>;
+  exercises?: Partial<MotionTrackerConfig["exercises"]>;
 };
 
 function createMotionTracker(options: CreateMotionTrackerOptions = {}) {
@@ -138,6 +165,7 @@ function createConfig(overrides: PartialMotionTrackerConfig = {}): MotionTracker
     },
     exercises: {
       enabled: false,
+      ...overrides.exercises,
     },
     minConfidence: 0,
     smoothing: {
@@ -166,6 +194,14 @@ function createLandmarkTrackerMock(pose: PoseResult | null, detectError?: Error)
 
       return pose;
     }),
+    dispose: vi.fn(),
+  };
+}
+
+function createSequentialLandmarkTrackerMock(poses: Array<PoseResult | null>): MotionLandmarkTracker {
+  return {
+    initialize: vi.fn().mockResolvedValue(undefined),
+    detect: vi.fn(() => poses.shift() ?? null),
     dispose: vi.fn(),
   };
 }
@@ -208,4 +244,26 @@ function landmark(name: string, index: number, x: number, y: number, visibility 
     y,
     visibility,
   };
+}
+
+function createSquatDownLegs(): Landmark[] {
+  return [
+    landmark("leftHip", 23, 0, 0),
+    landmark("leftKnee", 25, 0, 1),
+    landmark("leftAnkle", 27, 1, 1),
+    landmark("rightHip", 24, 1, 0),
+    landmark("rightKnee", 26, 1, 1),
+    landmark("rightAnkle", 28, 2, 1),
+  ];
+}
+
+function createSquatUpLegs(): Landmark[] {
+  return [
+    landmark("leftHip", 23, 0, 0),
+    landmark("leftKnee", 25, 0, 1),
+    landmark("leftAnkle", 27, 0, 2),
+    landmark("rightHip", 24, 1, 0),
+    landmark("rightKnee", 26, 1, 1),
+    landmark("rightAnkle", 28, 1, 2),
+  ];
 }
