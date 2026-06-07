@@ -13,12 +13,17 @@ export interface TrackerStatusEvent {
   status: TrackerStatus;
 }
 
+export interface TrackerLifecycleEvent {
+  timestamp: number;
+}
+
 export interface MotionTrackerEventMap {
   pose: PoseResult;
   gesture: GestureResult;
   exercise: ExerciseResult;
-  status: TrackerStatusEvent;
   error: TrackerErrorEvent;
+  started: TrackerLifecycleEvent;
+  stopped: TrackerLifecycleEvent;
 }
 
 export type MotionTrackerEventName = keyof MotionTrackerEventMap;

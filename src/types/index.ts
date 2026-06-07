@@ -7,6 +7,7 @@ export type {
   MotionTrackerEventMap,
   MotionTrackerEventName,
   TrackerErrorEvent,
+  TrackerLifecycleEvent,
   TrackerStatus,
   TrackerStatusEvent,
 } from "./events";
