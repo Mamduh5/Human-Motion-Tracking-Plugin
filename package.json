@@ -1,6 +1,6 @@
 {
   "name": "human-motion-tracking-plugin",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Reusable camera-based human pose tracking plugin for gesture and workout movement detection.",
   "homepage": "https://github.com/Mamduh5/Human-Motion-Tracking-Plugin#readme",
   "bugs": {
