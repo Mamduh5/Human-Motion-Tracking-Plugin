@@ -33,8 +33,14 @@ export {
 export type { Point2D, PoseLandmarkName, SmoothingFilterOptions, UnnamedLandmark } from "./normalizers/index";
 export { PluginManager, registerPlugin } from "./plugins/index";
 export type { MotionPlugin, MotionPluginApi } from "./plugins/index";
-export { PoseTracker, TrackerProvider } from "./trackers/index";
-export type { MotionLandmarkTracker, PoseTrackerConfig, TrackerProviderConfig, TrackerProviderMode } from "./trackers/index";
+export { HolisticTracker, PoseTracker, TrackerProvider } from "./trackers/index";
+export type {
+  HolisticTrackerConfig,
+  MotionLandmarkTracker,
+  PoseTrackerConfig,
+  TrackerProviderConfig,
+  TrackerProviderMode,
+} from "./trackers/index";
 export type * from "./types/index";
 export {
   averageConfidence,

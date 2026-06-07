@@ -9,4 +9,9 @@ export interface MotionLandmarkTracker {
 
 export type PoseTrackerConfig = PoseModelConfig;
 
-export type TrackerProviderMode = "pose";
+export interface HolisticTrackerConfig {
+  modelAssetPath?: string;
+  wasmAssetPath?: string;
+}
+
+export type TrackerProviderMode = "pose" | "holistic";
