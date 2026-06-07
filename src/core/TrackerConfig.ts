@@ -1,6 +1,7 @@
 import type {
   GestureConfig,
   GestureStabilityConfig,
+  HandTrackingConfig,
   MotionTrackerConfig,
   PerformanceConfig,
   PerformanceProfile,
@@ -14,10 +15,19 @@ const PROFILE_TARGET_FPS: Record<PerformanceProfile, number> = {
   balanced: 15,
   quality: 30,
 };
+const DEFAULT_HAND_TARGET_FPS = 10;
+const DEFAULT_NUM_HANDS = 2;
+
+type ResolvedHandTrackingConfig = HandTrackingConfig & {
+  enabled: boolean;
+  numHands: number;
+  targetFps: number;
+};
 
 export type ResolvedMotionTrackerConfig = MotionTrackerConfig & {
   pose: PoseModelConfig;
   performance: Required<PerformanceConfig>;
+  hands: ResolvedHandTrackingConfig;
   gestures: GestureConfig & {
     precision: NonNullable<GestureConfig["precision"]>;
     thresholds: GestureThresholds;
@@ -44,6 +54,7 @@ export function resolveMotionTrackerConfig(config: MotionTrackerConfig): Resolve
     pose: config.pose,
     gestures: resolveGestureConfig(config.gestures),
     performance: resolvePerformanceConfig(config.performance),
+    hands: resolveHandTrackingConfig(config.hands),
   };
 }
 
@@ -85,5 +96,34 @@ function resolvePerformanceConfig(performance?: PerformanceConfig): Required<Per
     profile,
     targetFps,
     adaptive: performance?.adaptive ?? false,
+  };
+}
+
+function resolveHandTrackingConfig(hands?: HandTrackingConfig): ResolvedHandTrackingConfig {
+  const enabled = hands?.enabled ?? false;
+  const numHands = hands?.numHands ?? DEFAULT_NUM_HANDS;
+  const targetFps = hands?.targetFps ?? DEFAULT_HAND_TARGET_FPS;
+
+  if (!Number.isInteger(numHands) || numHands <= 0) {
+    throw new Error("MotionTrackerConfig.hands.numHands must be a positive integer.");
+  }
+
+  if (!Number.isFinite(targetFps) || targetFps <= 0) {
+    throw new Error("MotionTrackerConfig.hands.targetFps must be a positive number.");
+  }
+
+  if (enabled && !hands?.modelAssetPath) {
+    throw new Error("MotionTrackerConfig.hands.modelAssetPath is required when hand tracking is enabled.");
+  }
+
+  if (enabled && !hands?.wasmAssetPath) {
+    throw new Error("MotionTrackerConfig.hands.wasmAssetPath is required when hand tracking is enabled.");
+  }
+
+  return {
+    ...hands,
+    enabled,
+    numHands,
+    targetFps,
   };
 }

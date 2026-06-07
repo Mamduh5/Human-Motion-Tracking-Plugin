@@ -9,10 +9,11 @@ import {
   type CalibrationResult,
   type GestureDebugEvent,
   type GestureResult,
+  type HandResult,
   type MotionTrackerConfig,
   type PoseResult,
 } from "../../../src/index";
-import { clearPose, renderPose } from "./renderPose";
+import { clearPose, renderMotionFrame } from "./renderPose";
 
 const video = document.querySelector<HTMLVideoElement>("#video");
 const overlay = document.querySelector<HTMLCanvasElement>("#overlay");
@@ -39,7 +40,12 @@ const detectionsPerSecondElement = document.querySelector<HTMLElement>("#detecti
 const averageDetectionMsElement = document.querySelector<HTMLElement>("#averageDetectionMs");
 const framesSkippedElement = document.querySelector<HTMLElement>("#framesSkipped");
 const precisionElement = document.querySelector<HTMLElement>("#precision");
+const handCountElement = document.querySelector<HTMLElement>("#handCount");
+const handednessElement = document.querySelector<HTMLElement>("#handedness");
+const handConfidenceElement = document.querySelector<HTMLElement>("#handConfidence");
+const handTargetFpsElement = document.querySelector<HTMLElement>("#handTargetFps");
 const precisionSelect = document.querySelector<HTMLSelectElement>("#precisionSelect");
+const handTrackingToggle = document.querySelector<HTMLInputElement>("#handTrackingToggle");
 const stabilityToggle = document.querySelector<HTMLInputElement>("#stabilityToggle");
 const debugToggle = document.querySelector<HTMLInputElement>("#debugToggle");
 const gestureDebugElement = document.querySelector<HTMLElement>("#gestureDebug");
@@ -70,7 +76,12 @@ if (
   !averageDetectionMsElement ||
   !framesSkippedElement ||
   !precisionElement ||
+  !handCountElement ||
+  !handednessElement ||
+  !handConfidenceElement ||
+  !handTargetFpsElement ||
   !precisionSelect ||
+  !handTrackingToggle ||
   !stabilityToggle ||
   !debugToggle ||
   !gestureDebugElement
@@ -79,10 +90,13 @@ if (
 }
 
 const CALIBRATION_STORAGE_KEY = "humanMotionTrackingCalibration";
+const HAND_TARGET_FPS = 10;
 const activeGestures = new Map<string, GestureResult>();
 const rawGestureDebug = new Map<string, GestureDebugEvent>();
 const stableGestureDebug = new Map<string, GestureResult>();
 let tracker: MotionTracker | undefined;
+let latestPose: PoseResult | undefined;
+let latestHands: HandResult | undefined;
 
 function createTrackerConfig(): MotionTrackerConfig {
   return {
@@ -136,6 +150,21 @@ function createTrackerConfig(): MotionTrackerConfig {
       targetFps: 10,
       adaptive: false,
     },
+    hands: handTrackingToggle.checked
+      ? {
+          enabled: true,
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+          wasmAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+          targetFps: HAND_TARGET_FPS,
+        }
+      : {
+          enabled: false,
+        },
     calibration: {
       enabled: true,
       autoApply: true,
@@ -181,14 +210,25 @@ debugToggle.addEventListener("change", () => {
   updateGestureDebug();
 });
 
+handTrackingToggle.addEventListener("change", () => {
+  updateHandReadout();
+
+  if (tracker?.getState().status === "running") {
+    statusElement.textContent = "Restart required for hand tracking change";
+  }
+});
+
 async function startTracking(): Promise<void> {
   setControlsStarting();
   activeGestures.clear();
   rawGestureDebug.clear();
   stableGestureDebug.clear();
+  latestPose = undefined;
+  latestHands = undefined;
   updateGestureText();
   updateGestureDebug();
   updatePerformanceReadout();
+  updateHandReadout();
   resetCalibrationReadout();
   const config = createTrackerConfig();
 
@@ -208,6 +248,7 @@ async function startTracking(): Promise<void> {
     saveCalibrationButton.disabled = true;
     loadCalibrationButton.disabled = false;
     stabilityToggle.disabled = true;
+    handTrackingToggle.disabled = true;
     precisionSelect.disabled = true;
     updatePerformanceReadout();
   });
@@ -220,19 +261,29 @@ async function startTracking(): Promise<void> {
     saveCalibrationButton.disabled = true;
     loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
+    handTrackingToggle.disabled = false;
     precisionSelect.disabled = false;
     activeGestures.clear();
     rawGestureDebug.clear();
     stableGestureDebug.clear();
+    latestPose = undefined;
+    latestHands = undefined;
     updateGestureText();
     updateGestureDebug();
     updatePerformanceReadout();
+    updateHandReadout();
     resetCalibrationReadout();
     clearPose(overlay);
   });
   tracker.on("pose", (pose: PoseResult) => {
-    renderPose(overlay, pose);
+    latestPose = pose;
+    renderMotionFrame(overlay, latestPose, latestHands);
     updatePerformanceReadout();
+  });
+  tracker.on("hands", (hands: HandResult) => {
+    latestHands = hands;
+    renderMotionFrame(overlay, latestPose, latestHands);
+    updateHandReadout(hands);
   });
   tracker.on("gesture", (gesture: GestureResult) => {
     if (gesture.active) {
@@ -302,6 +353,7 @@ async function startTracking(): Promise<void> {
     saveCalibrationButton.disabled = true;
     loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
+    handTrackingToggle.disabled = false;
     precisionSelect.disabled = false;
   });
 
@@ -316,6 +368,7 @@ async function startTracking(): Promise<void> {
     saveCalibrationButton.disabled = true;
     loadCalibrationButton.disabled = true;
     stabilityToggle.disabled = false;
+    handTrackingToggle.disabled = false;
     precisionSelect.disabled = false;
   }
 }
@@ -333,6 +386,7 @@ function setControlsStarting(): void {
   cancelCalibrationButton.disabled = true;
   saveCalibrationButton.disabled = true;
   loadCalibrationButton.disabled = true;
+  handTrackingToggle.disabled = true;
 }
 
 function startCalibration(): void {
@@ -400,6 +454,16 @@ function updatePerformanceReadout(): void {
   averageDetectionMsElement.textContent = formatNumber(state?.averageDetectionMs, "ms");
   framesSkippedElement.textContent = String(state?.framesSkipped ?? 0);
   precisionElement.textContent = precisionSelect.value;
+}
+
+function updateHandReadout(result = latestHands): void {
+  const handCount = result?.hands.length ?? 0;
+  const targetFps = handTrackingToggle.checked ? String(HAND_TARGET_FPS) : "off";
+
+  handCountElement.textContent = String(handCount);
+  handednessElement.textContent = handCount > 0 ? result!.hands.map((hand) => `${hand.handedness} ${hand.handednessScore.toFixed(2)}`).join(", ") : "n/a";
+  handConfidenceElement.textContent = formatNumber(result?.confidence);
+  handTargetFpsElement.textContent = targetFps;
 }
 
 function updateCalibrationReadout(progress: CalibrationProgressEvent): void {

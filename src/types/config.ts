@@ -55,6 +55,17 @@ export interface PoseModelConfig {
   numPoses?: number;
 }
 
+export interface HandTrackingConfig {
+  enabled?: boolean;
+  modelAssetPath?: string;
+  wasmAssetPath?: string;
+  numHands?: number;
+  minHandDetectionConfidence?: number;
+  minHandPresenceConfidence?: number;
+  minTrackingConfidence?: number;
+  targetFps?: number;
+}
+
 export interface MotionTrackerConfig {
   mode: TrackerMode;
   camera: CameraConfig;
@@ -64,6 +75,7 @@ export interface MotionTrackerConfig {
   minConfidence: number;
   smoothing: SmoothingConfig;
   performance?: PerformanceConfig;
+  hands?: HandTrackingConfig;
   calibration?: {
     enabled?: boolean;
     autoApply?: boolean;

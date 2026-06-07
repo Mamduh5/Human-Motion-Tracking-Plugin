@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { MotionTracker, resolveMotionTrackerConfig } from "../../src/core";
 import type { CameraSource } from "../../src/camera";
 import type { MotionPlugin } from "../../src/plugins";
-import type { MotionLandmarkTracker } from "../../src/trackers";
-import type { CalibrationResult, Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
+import type { HandLandmarkTracker, MotionLandmarkTracker } from "../../src/trackers";
+import type { CalibrationResult, HandResult, Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
 
 describe("MotionTracker", () => {
   it("defaults performance config to the balanced profile", () => {
@@ -438,6 +438,84 @@ describe("MotionTracker", () => {
         }),
       }),
     );
+  });
+
+  it("does not initialize an injected hand tracker when hands are disabled", async () => {
+    const handTracker = createHandTrackerMock(createHandResult());
+    const { tracker, raf } = createMotionTracker({ handTracker });
+
+    await tracker.start();
+    raf.flushFrame(1);
+    tracker.stop();
+
+    expect(handTracker.initialize).not.toHaveBeenCalled();
+    expect(handTracker.detect).not.toHaveBeenCalled();
+    expect(handTracker.dispose).not.toHaveBeenCalled();
+  });
+
+  it("initializes and disposes the hand tracker when hands are enabled", async () => {
+    const handTracker = createHandTrackerMock(createHandResult());
+    const { tracker } = createMotionTracker({
+      handTracker,
+      config: {
+        hands: createHandsConfig(),
+      },
+    });
+
+    await tracker.start();
+    tracker.stop();
+
+    expect(handTracker.initialize).toHaveBeenCalledOnce();
+    expect(handTracker.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("emits hands events when hand results exist", async () => {
+    const handResult = createHandResult();
+    const { tracker, raf } = createMotionTracker({
+      handTracker: createHandTrackerMock(handResult),
+      config: {
+        hands: createHandsConfig(),
+      },
+    });
+    const handsHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.on("hands", handsHandler);
+    tracker.on("handsDebug", debugHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(handsHandler).toHaveBeenCalledWith(handResult);
+    expect(debugHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: handResult,
+        detected: true,
+        skipped: false,
+      }),
+    );
+  });
+
+  it("throttles hand detection independently from pose detection", async () => {
+    const handTracker = createHandTrackerMock(createHandResult());
+    const { tracker, landmarkTracker, raf } = createMotionTracker({
+      handTracker,
+      config: {
+        performance: {
+          targetFps: 1000,
+        },
+        hands: {
+          ...createHandsConfig(),
+          targetFps: 10,
+        },
+      },
+    });
+
+    await tracker.start();
+    flushFrames(raf, [0, 50, 100, 150, 200]);
+
+    expect(landmarkTracker.detect).toHaveBeenCalledTimes(5);
+    expect(handTracker.detect).toHaveBeenCalledTimes(3);
   });
 
   it("emits calibration started, progress, and completed events", async () => {
@@ -946,6 +1024,7 @@ describe("MotionTracker", () => {
 interface CreateMotionTrackerOptions {
   config?: PartialMotionTrackerConfig;
   landmarkTracker?: MotionLandmarkTracker;
+  handTracker?: HandLandmarkTracker;
 }
 
 type PartialMotionTrackerConfig = Partial<Omit<MotionTrackerConfig, "gestures" | "exercises">> & {
@@ -962,6 +1041,7 @@ function createMotionTracker(options: CreateMotionTrackerOptions = {}) {
   const tracker = new MotionTracker(createConfig(options.config), {
     camera,
     landmarkTracker,
+    handTracker: options.handTracker,
     requestAnimationFrame: raf.requestAnimationFrame,
     cancelAnimationFrame: raf.cancelAnimationFrame,
     now: () => timestamps.shift() ?? 999,
@@ -1032,6 +1112,14 @@ function createSequentialLandmarkTrackerMock(poses: Array<PoseResult | null>): M
   return {
     initialize: vi.fn().mockResolvedValue(undefined),
     detect: vi.fn(() => poses.shift() ?? null),
+    dispose: vi.fn(),
+  };
+}
+
+function createHandTrackerMock(result: HandResult | null): HandLandmarkTracker {
+  return {
+    initialize: vi.fn().mockResolvedValue(undefined),
+    detect: vi.fn(() => result),
     dispose: vi.fn(),
   };
 }
@@ -1124,6 +1212,36 @@ function createArmGesturePose(): PoseResult {
     landmark("leftHip", 23, 0.35, 0.7),
     landmark("rightHip", 24, 0.65, 0.7),
   ]);
+}
+
+function createHandResult(): HandResult {
+  return {
+    timestamp: 1234,
+    confidence: 0.9,
+    hands: [
+      {
+        handedness: "right",
+        handednessScore: 0.9,
+        landmarks: [
+          {
+            name: "wrist",
+            index: 0,
+            x: 0.5,
+            y: 0.5,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function createHandsConfig(): NonNullable<MotionTrackerConfig["hands"]> {
+  return {
+    enabled: true,
+    modelAssetPath: "/hand.task",
+    wasmAssetPath: "/wasm",
+    targetFps: 10,
+  };
 }
 
 function createCalibrationPose(): PoseResult {

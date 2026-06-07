@@ -16,6 +16,7 @@ export type {
   ExerciseConfig,
   GestureConfig,
   GestureStabilityConfig,
+  HandTrackingConfig,
   MotionTrackerConfig,
   PerformanceConfig,
   PerformanceProfile,
@@ -24,9 +25,12 @@ export type {
 } from "./config";
 export type { ExerciseResult } from "./exercises";
 export type { GestureMetadata, GestureResult } from "./gestures";
+export type { DetectedHand, Handedness, HandLandmark, HandLandmarkName, HandResult } from "./hands";
+export { HAND_LANDMARK_NAMES } from "./hands";
 export type { Landmark, PoseResult } from "./landmarks";
 export type {
   GestureDebugEvent,
+  HandsDebugEvent,
   MotionTrackerEvent,
   MotionTrackerEventMap,
   MotionTrackerEventName,

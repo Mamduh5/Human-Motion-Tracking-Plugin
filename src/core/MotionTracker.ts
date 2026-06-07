@@ -20,7 +20,7 @@ import {
 } from "../detectors";
 import { EventEmitter } from "../events";
 import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugins";
-import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
+import { HandTracker, TrackerProvider, type HandLandmarkTracker, type MotionLandmarkTracker } from "../trackers";
 import type {
   CalibrationOptions,
   CalibrationResult,
@@ -29,6 +29,8 @@ import type {
   GestureResult,
   MotionTrackerConfig,
   MotionTrackerEventMap,
+  HandResult,
+  HandsDebugEvent,
   PoseResult,
   TrackerErrorEvent,
 } from "../types";
@@ -48,6 +50,7 @@ type CancelAnimationFrame = (handle: number) => void;
 export interface MotionTrackerDependencies {
   camera?: CameraSource;
   landmarkTracker?: MotionLandmarkTracker;
+  handTracker?: HandLandmarkTracker;
   requestAnimationFrame?: RequestAnimationFrame;
   cancelAnimationFrame?: CancelAnimationFrame;
   now?: () => number;
@@ -78,10 +81,12 @@ export class MotionTracker {
   private readonly events = new EventEmitter<MotionTrackerEventMap>();
   private readonly camera: CameraSource;
   private readonly landmarkTracker: MotionLandmarkTracker;
+  private readonly handTracker?: HandLandmarkTracker;
   private readonly requestFrame: RequestAnimationFrame;
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
   private readonly detectionIntervalMs: number;
+  private readonly handDetectionIntervalMs: number;
   private readonly pluginManager: PluginManager;
   private readonly gestureStabilityFilter: GestureStabilityFilter;
   private readonly calibrationManager: CalibrationManager;
@@ -92,6 +97,7 @@ export class MotionTracker {
   private calibrationResult?: CalibrationResult;
   private appliedCalibration?: CalibrationResult;
   private lastDetectionTimestamp?: number;
+  private lastHandDetectionTimestamp?: number;
   private averageDetectionMs?: number;
   private framesSkipped = 0;
   private detectionCount = 0;
@@ -107,10 +113,22 @@ export class MotionTracker {
         mode: "pose",
         pose: this.config.pose,
       });
+    this.handTracker = this.config.hands.enabled
+      ? dependencies.handTracker ??
+        new HandTracker({
+          modelAssetPath: this.config.hands.modelAssetPath!,
+          wasmAssetPath: this.config.hands.wasmAssetPath!,
+          numHands: this.config.hands.numHands,
+          minHandDetectionConfidence: this.config.hands.minHandDetectionConfidence,
+          minHandPresenceConfidence: this.config.hands.minHandPresenceConfidence,
+          minTrackingConfidence: this.config.hands.minTrackingConfidence,
+        })
+      : undefined;
     this.requestFrame = dependencies.requestAnimationFrame ?? getRequestAnimationFrame();
     this.cancelFrame = dependencies.cancelAnimationFrame ?? getCancelAnimationFrame();
     this.now = dependencies.now ?? getTimestamp;
     this.detectionIntervalMs = 1000 / this.config.performance.targetFps;
+    this.handDetectionIntervalMs = 1000 / this.config.hands.targetFps;
     this.gestureStabilityFilter = new GestureStabilityFilter({
       activeFrameThreshold: this.config.gestures.stability.activeFrames,
       inactiveFrameThreshold: this.config.gestures.stability.inactiveFrames,
@@ -135,6 +153,7 @@ export class MotionTracker {
 
     try {
       await this.landmarkTracker.initialize();
+      await this.handTracker?.initialize();
       this.videoElement = await this.camera.start();
       this.state = {
         ...this.state,
@@ -148,6 +167,7 @@ export class MotionTracker {
       this.handleError(error);
       this.camera.stop();
       this.landmarkTracker.dispose();
+      this.handTracker?.dispose();
       throw error;
     }
   }
@@ -165,6 +185,7 @@ export class MotionTracker {
     const stoppedAt = this.now();
     this.camera.stop();
     this.landmarkTracker.dispose();
+    this.handTracker?.dispose();
     this.resetPerformanceCounters();
     this.state = {
       ...this.state,
@@ -311,27 +332,55 @@ export class MotionTracker {
       lastFrameTimestamp: timestamp,
     };
 
-    if (!this.shouldRunDetection(timestamp)) {
+    const shouldRunPoseDetection = this.shouldRunDetection(timestamp);
+    const shouldRunHandDetection = this.shouldRunHandDetection(timestamp);
+
+    if (!shouldRunPoseDetection && !shouldRunHandDetection) {
       this.framesSkipped += 1;
       this.state = {
         ...this.state,
         ...this.getPerformanceState(),
       };
+      this.emitHandsDebugEvent({
+        result: null,
+        detected: false,
+        skipped: true,
+        reason: "throttled",
+      });
       this.scheduleNextFrameIfRunning();
       return;
     }
 
     try {
-      const detectionStartedAt = getTimestamp();
-      const pose = this.landmarkTracker.detect(this.videoElement, timestamp);
-      this.updateDetectionPerformance(timestamp, Math.max(0, getTimestamp() - detectionStartedAt));
+      if (shouldRunPoseDetection) {
+        const detectionStartedAt = getTimestamp();
+        const pose = this.landmarkTracker.detect(this.videoElement, timestamp);
+        this.updateDetectionPerformance(timestamp, Math.max(0, getTimestamp() - detectionStartedAt));
 
-      if (pose && pose.confidence >= this.config.minConfidence) {
-        this.events.emit("pose", pose);
-        this.pluginManager.notifyPose(pose);
-        this.collectCalibrationSample(pose);
-        this.emitGestures(pose);
-        this.emitExercises(pose);
+        if (pose && pose.confidence >= this.config.minConfidence) {
+          this.events.emit("pose", pose);
+          this.pluginManager.notifyPose(pose);
+          this.collectCalibrationSample(pose);
+          this.emitGestures(pose);
+          this.emitExercises(pose);
+        }
+      } else {
+        this.framesSkipped += 1;
+        this.state = {
+          ...this.state,
+          ...this.getPerformanceState(),
+        };
+      }
+
+      if (shouldRunHandDetection) {
+        this.detectHands(timestamp);
+      } else {
+        this.emitHandsDebugEvent({
+          result: null,
+          detected: false,
+          skipped: true,
+          reason: "throttled",
+        });
       }
 
       this.scheduleNextFrameIfRunning();
@@ -343,6 +392,13 @@ export class MotionTracker {
 
   private shouldRunDetection(timestamp: number): boolean {
     return this.lastDetectionTimestamp === undefined || timestamp - this.lastDetectionTimestamp >= this.detectionIntervalMs;
+  }
+
+  private shouldRunHandDetection(timestamp: number): boolean {
+    return Boolean(
+      this.handTracker &&
+        (this.lastHandDetectionTimestamp === undefined || timestamp - this.lastHandDetectionTimestamp >= this.handDetectionIntervalMs),
+    );
   }
 
   private updateDetectionPerformance(timestamp: number, detectionMs: number): void {
@@ -367,6 +423,7 @@ export class MotionTracker {
 
   private resetPerformanceCounters(): void {
     this.lastDetectionTimestamp = undefined;
+    this.lastHandDetectionTimestamp = undefined;
     this.averageDetectionMs = undefined;
     this.framesSkipped = 0;
     this.detectionCount = 0;
@@ -448,6 +505,43 @@ export class MotionTracker {
       if (exercise.confidence >= (this.config.exercises.minConfidence ?? 0)) {
         this.emitExerciseEvent(exercise);
       }
+    }
+  }
+
+  private detectHands(timestamp: number): void {
+    if (!this.handTracker || !this.videoElement) {
+      return;
+    }
+
+    const detectionStartedAt = getTimestamp();
+
+    try {
+      const result = this.handTracker.detect(this.videoElement, timestamp);
+      const detectionMs = Math.max(0, getTimestamp() - detectionStartedAt);
+
+      this.lastHandDetectionTimestamp = timestamp;
+
+      if (result) {
+        this.events.emit("hands", result);
+      }
+
+      this.emitHandsDebugEvent({
+        result,
+        detected: Boolean(result && result.hands.length > 0),
+        detectionMs,
+        skipped: false,
+      });
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+
+      this.emitHandsDebugEvent({
+        result: null,
+        detected: false,
+        detectionMs: Math.max(0, getTimestamp() - detectionStartedAt),
+        skipped: false,
+        reason: normalizedError.message,
+      });
+      throw error;
     }
   }
 
@@ -536,6 +630,12 @@ export class MotionTracker {
 
   private emitGestureDebugEvent(debugEvent: GestureDebugEvent): void {
     this.events.emit("gestureDebug", debugEvent);
+  }
+
+  private emitHandsDebugEvent(debugEvent: HandsDebugEvent): void {
+    if (this.handTracker) {
+      this.events.emit("handsDebug", debugEvent);
+    }
   }
 
   private emitExerciseEvent(exercise: ExerciseResult): void {

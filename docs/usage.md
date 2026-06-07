@@ -181,6 +181,37 @@ const config: MotionTrackerConfig = {
 
 Use `thresholds` for targeted overrides after choosing a preset. For example, lowering `handUpYMargin` makes hand-up gestures activate with less vertical distance between hand and shoulder.
 
+## Hand Tracking
+
+Hand tracking is optional and disabled by default. It provides raw MediaPipe Hand Landmarker output in SDK-owned types so apps can inspect hand landmarks. Finger gestures are not implemented yet.
+
+```ts
+const tracker = new MotionTracker({
+  ...config,
+  hands: {
+    enabled: true,
+    modelAssetPath:
+      "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+    wasmAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+    numHands: 2,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+    targetFps: 10,
+  },
+});
+
+tracker.on("hands", (result) => {
+  for (const hand of result.hands) {
+    console.log(hand.handedness, hand.handednessScore, hand.landmarks);
+  }
+});
+```
+
+MediaPipe Hand Landmarker `detectForVideo` is synchronous and can block the UI thread. Use a lower hand detection rate than pose detection when possible. For low-power devices, start with pose `performance.targetFps` between 10 and 15 and `hands.targetFps` between 5 and 10.
+
+If `hands.enabled` is true, `hands.modelAssetPath` and `hands.wasmAssetPath` are required. If hand tracking fails to initialize, `MotionTracker.start()` fails and emits an `error` event with a MediaPipe asset-loading message.
+
 ## Calibration
 
 Calibration is optional. It uses the same Pose Landmarker output as normal tracking and does not add MediaPipe hand tracking. During calibration, ask the user to stand front-facing with arms relaxed for about 3 seconds. The SDK collects pose samples, computes body scale and visibility metrics, and recommends conservative gesture thresholds for that user, camera, and framing.
@@ -563,10 +594,12 @@ Then:
 8. Raise one or both hands to see `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, or `armsUp`.
 9. Try close-up and full-body framing after calibration to compare gesture threshold scaling.
 10. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
-11. Click Stop to stop the stream.
+11. Click Stop, enable hand tracking, and click Start again.
+12. Show one or both hands and confirm hand count, handedness, confidence, and hands target FPS update.
+13. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
-By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes.
+By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes. Hand tracking is off by default; changing the hand tracking checkbox while running requires a restart.
 
 ## Useful Scripts
 

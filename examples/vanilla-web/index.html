@@ -306,6 +306,25 @@
         </div>
       </section>
 
+      <section class="readout" aria-live="polite">
+        <div>
+          <p class="label">Hands</p>
+          <p id="handCount" class="value">0</p>
+        </div>
+        <div>
+          <p class="label">Handedness</p>
+          <p id="handedness" class="value value-small">n/a</p>
+        </div>
+        <div>
+          <p class="label">Hand confidence</p>
+          <p id="handConfidence" class="value">0.0</p>
+        </div>
+        <div>
+          <p class="label">Hands target FPS</p>
+          <p id="handTargetFps" class="value">off</p>
+        </div>
+      </section>
+
       <label class="debug-toggle">
         Precision
         <select id="precisionSelect">
@@ -313,6 +332,11 @@
           <option value="balanced">balanced</option>
           <option value="strict">strict</option>
         </select>
+      </label>
+
+      <label class="debug-toggle">
+        <input id="handTrackingToggle" type="checkbox" />
+        Enable hand tracking
       </label>
 
       <label class="debug-toggle">
