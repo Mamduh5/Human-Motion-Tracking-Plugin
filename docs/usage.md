@@ -176,6 +176,8 @@ await tracker.start();
 
 The hand-up detectors compare wrist and shoulder landmarks. A hand is considered up when the wrist landmark is above the matching shoulder landmark and the required landmarks are visible enough.
 
+`leftHandUp` and `rightHandUp` use MediaPipe's anatomical landmark labels, so "left" means the tracked person's left side, not the viewer's left side in a mirrored camera preview. Left/right-specific hand-up gestures also check whether the pose appears front-facing; side-facing poses may disable those specific gestures to avoid mislabeled hands. For side-facing interactions, prefer generic gesture designs as they are added, or build a plugin-level gesture that does not depend on anatomical left/right labels.
+
 Built-in gesture names include:
 
 - `leftHandUp`

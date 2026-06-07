@@ -112,6 +112,57 @@
         font-size: 18px;
         font-weight: 700;
       }
+
+      .debug-toggle {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        color: #52606d;
+        font-size: 14px;
+      }
+
+      .gesture-debug {
+        display: grid;
+        gap: 8px;
+        padding: 12px 14px;
+        border: 1px solid #d8e0e8;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .gesture-debug[hidden] {
+        display: none;
+      }
+
+      .debug-row {
+        display: grid;
+        grid-template-columns: minmax(110px, 1fr) repeat(4, minmax(80px, auto));
+        gap: 10px;
+        align-items: center;
+        font-size: 13px;
+      }
+
+      .debug-row + .debug-row {
+        padding-top: 8px;
+        border-top: 1px solid #edf1f5;
+      }
+
+      .debug-row span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .debug-empty {
+        margin: 0;
+        color: #52606d;
+        font-size: 13px;
+      }
+
+      @media (max-width: 700px) {
+        .debug-row {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
     </style>
   </head>
   <body>
@@ -138,6 +189,13 @@
           <p id="gestures" class="value">None</p>
         </div>
       </section>
+
+      <label class="debug-toggle">
+        <input id="debugToggle" type="checkbox" />
+        Show gesture debug
+      </label>
+
+      <section id="gestureDebug" class="gesture-debug" aria-live="polite" hidden></section>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

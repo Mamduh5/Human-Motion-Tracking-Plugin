@@ -45,11 +45,92 @@ describe("MotionTracker", () => {
     tracker.on("gesture", gestureHandler);
     await tracker.start();
     raf.flushFrame(1234);
+    raf.flushFrame(1235);
+    raf.flushFrame(1236);
 
     expect(landmarkTracker.detect).toHaveBeenCalledWith(expect.anything(), 1234);
     expect(poseHandler).toHaveBeenCalledWith(pose);
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
-    expect(tracker.getState()).toMatchObject({ status: "running", lastFrameTimestamp: 1234 });
+    expect(tracker.getState()).toMatchObject({ status: "running", lastFrameTimestamp: 1236 });
+  });
+
+  it("does not emit active true for a one-frame bothHandsUp detection", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createBothHandsUpPose(), createHandsDownPose(), createHandsDownPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["bothHandsUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+
+    expect(gestureHandler).not.toHaveBeenCalledWith(expect.objectContaining({ name: "bothHandsUp", active: true }));
+  });
+
+  it("emits active true after three stable leftHandUp frames", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose(), createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
+  it("emits active false after three stable inactive frames following an active gesture", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([
+        createLeftHandUpPose(),
+        createLeftHandUpPose(),
+        createLeftHandUpPose(),
+        createHandsDownPose(),
+        createHandsDownPose(),
+        createHandsDownPose(),
+      ]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    raf.flushFrame(3);
+    raf.flushFrame(4);
+    raf.flushFrame(5);
+    raf.flushFrame(6);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(2);
+    expect(gestureHandler).toHaveBeenNthCalledWith(1, expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(gestureHandler).toHaveBeenNthCalledWith(2, expect.objectContaining({ name: "leftHandUp", active: false }));
   });
 
   it("emits exercise events when exercises are enabled", async () => {
@@ -110,6 +191,8 @@ describe("MotionTracker", () => {
     tracker.registerPlugin(plugin);
     await tracker.start();
     raf.flushFrame(10);
+    raf.flushFrame(11);
+    raf.flushFrame(12);
     tracker.stop();
 
     expect(plugin.onStart).toHaveBeenCalledWith({ timestamp: 100 }, expect.any(Object));
@@ -329,6 +412,38 @@ function createPose(landmarks: Landmark[]): PoseResult {
     landmarks,
     confidence: 1,
   };
+}
+
+function createLeftHandUpPose(): PoseResult {
+  return createPose([
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+    landmark("leftHip", 23, 0.35, 0.7),
+    landmark("rightHip", 24, 0.65, 0.7),
+    landmark("leftWrist", 15, 0.3, 0.2),
+  ]);
+}
+
+function createBothHandsUpPose(): PoseResult {
+  return createPose([
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+    landmark("leftHip", 23, 0.35, 0.7),
+    landmark("rightHip", 24, 0.65, 0.7),
+    landmark("leftWrist", 15, 0.3, 0.2),
+    landmark("rightWrist", 16, 0.7, 0.2),
+  ]);
+}
+
+function createHandsDownPose(): PoseResult {
+  return createPose([
+    landmark("leftShoulder", 11, 0.3, 0.4),
+    landmark("rightShoulder", 12, 0.7, 0.4),
+    landmark("leftHip", 23, 0.35, 0.7),
+    landmark("rightHip", 24, 0.65, 0.7),
+    landmark("leftWrist", 15, 0.3, 0.6),
+    landmark("rightWrist", 16, 0.7, 0.6),
+  ]);
 }
 
 function landmark(name: string, index: number, x: number, y: number, visibility = 1): Landmark {

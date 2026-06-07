@@ -13,6 +13,7 @@ import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugi
 import { TrackerProvider, type MotionLandmarkTracker } from "../trackers";
 import type { ExerciseResult, GestureResult, MotionTrackerConfig, MotionTrackerEventMap, PoseResult, TrackerErrorEvent } from "../types";
 import { getTimestamp } from "../utils";
+import { GestureStabilityFilter } from "./GestureStabilityFilter";
 import { resolveMotionTrackerConfig, type ResolvedMotionTrackerConfig } from "./TrackerConfig";
 import { createInitialTrackerState, type MotionTrackerState } from "./TrackerState";
 
@@ -53,6 +54,7 @@ export class MotionTracker {
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
   private readonly pluginManager: PluginManager;
+  private readonly gestureStabilityFilter = new GestureStabilityFilter();
   private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
@@ -82,6 +84,7 @@ export class MotionTracker {
       status: "starting",
       startedAt: this.now(),
     };
+    this.gestureStabilityFilter.reset();
     this.resetExerciseAnalyzers();
 
     try {
@@ -206,7 +209,11 @@ export class MotionTracker {
       const gesture = detector(pose);
 
       if (gesture.confidence >= (this.config.gestures.minConfidence ?? 0)) {
-        this.emitGestureEvent(gesture);
+        const stableGesture = this.gestureStabilityFilter.filter(gesture);
+
+        if (stableGesture) {
+          this.emitGestureEvent(stableGesture);
+        }
       }
     }
   }

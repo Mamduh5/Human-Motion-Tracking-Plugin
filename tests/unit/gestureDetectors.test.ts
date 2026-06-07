@@ -13,7 +13,22 @@ describe("gesture detectors", () => {
       landmark("leftWrist", 15, 0.3, 0.2),
     ]);
 
-    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true, confidence: 1 });
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: true,
+      confidence: 1,
+      metadata: expect.objectContaining({
+        reason: "active",
+        torsoWidth: expect.any(Number),
+        wristY: 0.2,
+        shoulderY: 0.4,
+        yMargin: 0.03,
+        requiredVisibility: {
+          leftWrist: 1,
+          leftShoulder: 1,
+        },
+      }),
+    });
   });
 
   it("detects right hand up front-facing", () => {

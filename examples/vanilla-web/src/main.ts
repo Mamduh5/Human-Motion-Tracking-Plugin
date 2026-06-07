@@ -13,12 +13,15 @@ const startButton = document.querySelector<HTMLButtonElement>("#startButton");
 const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const gesturesElement = document.querySelector<HTMLElement>("#gestures");
+const debugToggle = document.querySelector<HTMLInputElement>("#debugToggle");
+const gestureDebugElement = document.querySelector<HTMLElement>("#gestureDebug");
 
-if (!video || !overlay || !startButton || !stopButton || !statusElement || !gesturesElement) {
+if (!video || !overlay || !startButton || !stopButton || !statusElement || !gesturesElement || !debugToggle || !gestureDebugElement) {
   throw new Error("Example UI failed to initialize.");
 }
 
 const activeGestures = new Map<string, GestureResult>();
+const gestureDebug = new Map<string, GestureResult>();
 let tracker: MotionTracker | undefined;
 
 const config: MotionTrackerConfig = {
@@ -58,10 +61,16 @@ stopButton.addEventListener("click", () => {
   stopTracking();
 });
 
+debugToggle.addEventListener("change", () => {
+  updateGestureDebug();
+});
+
 async function startTracking(): Promise<void> {
   setControlsStarting();
   activeGestures.clear();
+  gestureDebug.clear();
   updateGestureText();
+  updateGestureDebug();
 
   tracker = new MotionTracker(config, {
     camera: new CameraManager({
@@ -80,7 +89,9 @@ async function startTracking(): Promise<void> {
     startButton.disabled = false;
     stopButton.disabled = true;
     activeGestures.clear();
+    gestureDebug.clear();
     updateGestureText();
+    updateGestureDebug();
     clearPose(overlay);
   });
   tracker.on("pose", (pose: PoseResult) => {
@@ -93,7 +104,9 @@ async function startTracking(): Promise<void> {
       activeGestures.delete(gesture.name);
     }
 
+    gestureDebug.set(gesture.name, gesture);
     updateGestureText();
+    updateGestureDebug();
   });
   tracker.on("error", (error) => {
     statusElement.textContent = error.message;
@@ -125,4 +138,57 @@ function updateGestureText(): void {
   const names = [...activeGestures.keys()];
 
   gesturesElement.textContent = names.length > 0 ? names.join(", ") : "None";
+}
+
+function updateGestureDebug(): void {
+  gestureDebugElement.hidden = !debugToggle.checked;
+
+  if (!debugToggle.checked) {
+    return;
+  }
+
+  gestureDebugElement.replaceChildren();
+
+  if (gestureDebug.size === 0) {
+    const empty = document.createElement("p");
+    empty.className = "debug-empty";
+    empty.textContent = "No stable gesture events yet.";
+    gestureDebugElement.append(empty);
+    return;
+  }
+
+  for (const gesture of gestureDebug.values()) {
+    gestureDebugElement.append(createGestureDebugRow(gesture));
+  }
+}
+
+function createGestureDebugRow(gesture: GestureResult): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "debug-row";
+
+  const metadata = gesture.metadata ?? {};
+  const torsoWidth = metadata.torsoWidth;
+  const values = [
+    gesture.name,
+    `active: ${gesture.active ? "true" : "false"}`,
+    `reason: ${formatMetadataValue(metadata.reason)}`,
+    `confidence: ${gesture.confidence.toFixed(2)}`,
+    `torsoWidth: ${typeof torsoWidth === "number" ? torsoWidth.toFixed(3) : "n/a"}`,
+  ];
+
+  for (const value of values) {
+    const cell = document.createElement("span");
+    cell.textContent = value;
+    row.append(cell);
+  }
+
+  return row;
+}
+
+function formatMetadataValue(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return "n/a";
 }
