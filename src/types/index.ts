@@ -3,6 +3,7 @@ export type {
   CameraConfig,
   ExerciseConfig,
   GestureConfig,
+  GestureStabilityConfig,
   MotionTrackerConfig,
   PerformanceConfig,
   PerformanceProfile,

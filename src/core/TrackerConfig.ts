@@ -1,4 +1,11 @@
-import type { MotionTrackerConfig, PerformanceConfig, PerformanceProfile, PoseModelConfig } from "../types";
+import type {
+  GestureConfig,
+  GestureStabilityConfig,
+  MotionTrackerConfig,
+  PerformanceConfig,
+  PerformanceProfile,
+  PoseModelConfig,
+} from "../types";
 
 const DEFAULT_PERFORMANCE_PROFILE: PerformanceProfile = "balanced";
 const PROFILE_TARGET_FPS: Record<PerformanceProfile, number> = {
@@ -10,6 +17,9 @@ const PROFILE_TARGET_FPS: Record<PerformanceProfile, number> = {
 export type ResolvedMotionTrackerConfig = MotionTrackerConfig & {
   pose: PoseModelConfig;
   performance: Required<PerformanceConfig>;
+  gestures: GestureConfig & {
+    stability: Required<GestureStabilityConfig>;
+  };
 };
 
 export function resolveMotionTrackerConfig(config: MotionTrackerConfig): ResolvedMotionTrackerConfig {
@@ -28,7 +38,31 @@ export function resolveMotionTrackerConfig(config: MotionTrackerConfig): Resolve
   return {
     ...config,
     pose: config.pose,
+    gestures: resolveGestureConfig(config.gestures),
     performance: resolvePerformanceConfig(config.performance),
+  };
+}
+
+function resolveGestureConfig(gestures: GestureConfig): ResolvedMotionTrackerConfig["gestures"] {
+  const stability = gestures.stability ?? {};
+  const activeFrames = stability.activeFrames ?? 3;
+  const inactiveFrames = stability.inactiveFrames ?? 3;
+
+  if (!Number.isInteger(activeFrames) || activeFrames <= 0) {
+    throw new Error("MotionTrackerConfig.gestures.stability.activeFrames must be a positive integer.");
+  }
+
+  if (!Number.isInteger(inactiveFrames) || inactiveFrames <= 0) {
+    throw new Error("MotionTrackerConfig.gestures.stability.inactiveFrames must be a positive integer.");
+  }
+
+  return {
+    ...gestures,
+    stability: {
+      enabled: stability.enabled ?? true,
+      activeFrames,
+      inactiveFrames,
+    },
   };
 }
 

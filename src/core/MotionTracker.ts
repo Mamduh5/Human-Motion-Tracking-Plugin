@@ -65,7 +65,7 @@ export class MotionTracker {
   private readonly now: () => number;
   private readonly detectionIntervalMs: number;
   private readonly pluginManager: PluginManager;
-  private readonly gestureStabilityFilter = new GestureStabilityFilter();
+  private readonly gestureStabilityFilter: GestureStabilityFilter;
   private readonly exerciseAnalyzers = new Map<string, ExerciseAnalyzer>();
   private state = createInitialTrackerState();
   private animationFrameId?: number;
@@ -90,6 +90,10 @@ export class MotionTracker {
     this.cancelFrame = dependencies.cancelAnimationFrame ?? getCancelAnimationFrame();
     this.now = dependencies.now ?? getTimestamp;
     this.detectionIntervalMs = 1000 / this.config.performance.targetFps;
+    this.gestureStabilityFilter = new GestureStabilityFilter({
+      activeFrameThreshold: this.config.gestures.stability.activeFrames,
+      inactiveFrameThreshold: this.config.gestures.stability.inactiveFrames,
+    });
     this.pluginManager = new PluginManager(this.createPluginApi());
   }
 
@@ -295,7 +299,7 @@ export class MotionTracker {
       let stableGesture: GestureResult | undefined;
 
       if (passedMinConfidence) {
-        stableGesture = this.gestureStabilityFilter.filter(gesture) ?? undefined;
+        stableGesture = this.config.gestures.stability.enabled ? this.gestureStabilityFilter.filter(gesture) ?? undefined : gesture;
 
         if (stableGesture) {
           this.emitGestureEvent(stableGesture);

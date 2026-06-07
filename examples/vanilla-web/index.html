@@ -211,9 +211,24 @@
         </div>
       </section>
 
+      <section class="readout" aria-live="polite">
+        <div>
+          <p class="label">Detections/sec</p>
+          <p id="detectionsPerSecond" class="value">0.0</p>
+        </div>
+        <div>
+          <p class="label">Avg detect</p>
+          <p id="averageDetectionMs" class="value">0.0 ms</p>
+        </div>
+        <div>
+          <p class="label">Frames skipped</p>
+          <p id="framesSkipped" class="value">0</p>
+        </div>
+      </section>
+
       <label class="debug-toggle">
-        <input id="lowPowerToggle" type="checkbox" />
-        Low power mode
+        <input id="stabilityToggle" type="checkbox" checked />
+        Use gesture stability
       </label>
 
       <label class="debug-toggle">

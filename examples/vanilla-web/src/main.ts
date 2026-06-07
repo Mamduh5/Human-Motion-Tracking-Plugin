@@ -14,7 +14,10 @@ const startButton = document.querySelector<HTMLButtonElement>("#startButton");
 const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const gesturesElement = document.querySelector<HTMLElement>("#gestures");
-const lowPowerToggle = document.querySelector<HTMLInputElement>("#lowPowerToggle");
+const detectionsPerSecondElement = document.querySelector<HTMLElement>("#detectionsPerSecond");
+const averageDetectionMsElement = document.querySelector<HTMLElement>("#averageDetectionMs");
+const framesSkippedElement = document.querySelector<HTMLElement>("#framesSkipped");
+const stabilityToggle = document.querySelector<HTMLInputElement>("#stabilityToggle");
 const debugToggle = document.querySelector<HTMLInputElement>("#debugToggle");
 const gestureDebugElement = document.querySelector<HTMLElement>("#gestureDebug");
 
@@ -25,7 +28,10 @@ if (
   !stopButton ||
   !statusElement ||
   !gesturesElement ||
-  !lowPowerToggle ||
+  !detectionsPerSecondElement ||
+  !averageDetectionMsElement ||
+  !framesSkippedElement ||
+  !stabilityToggle ||
   !debugToggle ||
   !gestureDebugElement
 ) {
@@ -38,15 +44,13 @@ const stableGestureDebug = new Map<string, GestureResult>();
 let tracker: MotionTracker | undefined;
 
 function createTrackerConfig(): MotionTrackerConfig {
-  const lowPower = lowPowerToggle.checked;
-
   return {
     mode: "pose",
     camera: {
       facingMode: "user",
       width: 640,
       height: 480,
-      frameRate: lowPower ? 10 : 15,
+      frameRate: 10,
     },
     pose: {
       modelAssetPath:
@@ -60,6 +64,11 @@ function createTrackerConfig(): MotionTrackerConfig {
       enabled: true,
       names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
       minConfidence: 0.5,
+      stability: {
+        enabled: stabilityToggle.checked,
+        activeFrames: 3,
+        inactiveFrames: 3,
+      },
     },
     exercises: {
       enabled: false,
@@ -69,8 +78,9 @@ function createTrackerConfig(): MotionTrackerConfig {
       enabled: false,
     },
     performance: {
-      profile: lowPower ? "low-power" : "balanced",
-      targetFps: lowPower ? 10 : 15,
+      profile: "low-power",
+      targetFps: 10,
+      adaptive: false,
     },
   };
 }
@@ -94,6 +104,7 @@ async function startTracking(): Promise<void> {
   stableGestureDebug.clear();
   updateGestureText();
   updateGestureDebug();
+  updatePerformanceReadout();
   const config = createTrackerConfig();
 
   tracker = new MotionTracker(config, {
@@ -107,20 +118,25 @@ async function startTracking(): Promise<void> {
     statusElement.textContent = "Running";
     startButton.disabled = true;
     stopButton.disabled = false;
+    stabilityToggle.disabled = true;
+    updatePerformanceReadout();
   });
   tracker.on("stopped", () => {
     statusElement.textContent = "Stopped";
     startButton.disabled = false;
     stopButton.disabled = true;
+    stabilityToggle.disabled = false;
     activeGestures.clear();
     rawGestureDebug.clear();
     stableGestureDebug.clear();
     updateGestureText();
     updateGestureDebug();
+    updatePerformanceReadout();
     clearPose(overlay);
   });
   tracker.on("pose", (pose: PoseResult) => {
     renderPose(overlay, pose);
+    updatePerformanceReadout();
   });
   tracker.on("gesture", (gesture: GestureResult) => {
     if (gesture.active) {
@@ -132,16 +148,19 @@ async function startTracking(): Promise<void> {
     stableGestureDebug.set(gesture.name, gesture);
     updateGestureText();
     updateGestureDebug();
+    updatePerformanceReadout();
   });
   tracker.on("gestureDebug", (debugEvent: GestureDebugEvent) => {
     rawGestureDebug.set(debugEvent.gesture.name, debugEvent);
     updateGestureText();
     updateGestureDebug();
+    updatePerformanceReadout();
   });
   tracker.on("error", (error) => {
     statusElement.textContent = error.message;
     startButton.disabled = false;
     stopButton.disabled = true;
+    stabilityToggle.disabled = false;
   });
 
   try {
@@ -150,6 +169,7 @@ async function startTracking(): Promise<void> {
     statusElement.textContent = error instanceof Error ? error.message : String(error);
     startButton.disabled = false;
     stopButton.disabled = true;
+    stabilityToggle.disabled = false;
   }
 }
 
@@ -168,6 +188,14 @@ function updateGestureText(): void {
   const names = [...activeGestures.keys()];
 
   gesturesElement.textContent = names.length > 0 ? names.join(", ") : "None";
+}
+
+function updatePerformanceReadout(): void {
+  const state = tracker?.getState();
+
+  detectionsPerSecondElement.textContent = formatNumber(state?.detectionsPerSecond);
+  averageDetectionMsElement.textContent = formatNumber(state?.averageDetectionMs, "ms");
+  framesSkippedElement.textContent = String(state?.framesSkipped ?? 0);
 }
 
 function updateGestureDebug(): void {
@@ -220,7 +248,7 @@ function createRawGestureDebugRow(debugEvent: GestureDebugEvent): HTMLElement {
   const metadata = gesture.metadata ?? {};
   const values = [
     gesture.name,
-    `active: ${gesture.active ? "true" : "false"}`,
+    `raw active: ${gesture.active ? "true" : "false"}`,
     `confidence: ${gesture.confidence.toFixed(2)}`,
     `reason: ${formatMetadataValue(metadata.reason)}`,
     `orientation: ${formatMetadataValue(metadata.orientation)}`,
@@ -230,8 +258,9 @@ function createRawGestureDebugRow(debugEvent: GestureDebugEvent): HTMLElement {
     `shoulderY: ${formatMetadataValue(metadata.shoulderY)}`,
     `visibility: ${formatMetadataValue(metadata.requiredVisibility)}`,
     `sideResults: ${formatMetadataValue(metadata.sideResults)}`,
-    `min: ${debugEvent.passedMinConfidence ? "pass" : "fail"}`,
-    `stable: ${debugEvent.stabilityEmitted ? "emitted" : "held"}`,
+    `candidates: ${formatMetadataValue(metadata.activeSideCandidates)}`,
+    `passed min: ${debugEvent.passedMinConfidence ? "true" : "false"}`,
+    `stable emitted: ${debugEvent.stabilityEmitted ? "true" : "false"}`,
   ];
 
   appendCells(row, values);
@@ -276,6 +305,14 @@ function formatMetadataValue(value: unknown): string {
   }
 
   return "n/a";
+}
+
+function formatNumber(value: number | undefined, suffix = ""): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return suffix ? `0.0 ${suffix}` : "0.0";
+  }
+
+  return suffix ? `${value.toFixed(1)} ${suffix}` : value.toFixed(1);
 }
 
 function formatObjectValue(value: object): string {

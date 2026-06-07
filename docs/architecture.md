@@ -163,6 +163,11 @@ interface MotionTrackerConfig {
     enabled: boolean;
     names?: string[];
     minConfidence?: number;
+    stability?: {
+      enabled?: boolean;
+      activeFrames?: number;
+      inactiveFrames?: number;
+    };
   };
   exercises: {
     enabled: boolean;
@@ -185,6 +190,7 @@ interface MotionTrackerConfig {
 
 For `mode: "pose"`, both `pose.modelAssetPath` and `pose.wasmAssetPath` are required.
 Performance defaults to the balanced profile at 15 FPS. The low-power profile defaults to 10 FPS, and the quality profile defaults to 30 FPS.
+Gesture stability defaults to enabled with three active frames and three inactive frames.
 
 ## Browser-Only Camera Requirements
 

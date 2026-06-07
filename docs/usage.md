@@ -75,7 +75,7 @@ const config: MotionTrackerConfig = {
     facingMode: "user",
     width: 640,
     height: 480,
-    frameRate: 15,
+    frameRate: 10,
   },
   pose: {
     modelAssetPath:
@@ -96,8 +96,9 @@ const config: MotionTrackerConfig = {
     enabled: false,
   },
   performance: {
-    profile: "balanced",
-    targetFps: 15,
+    profile: "low-power",
+    targetFps: 10,
+    adaptive: false,
   },
 };
 
@@ -132,9 +133,10 @@ For weak devices:
 
 - Use a 640x480 camera stream.
 - Use `performance.targetFps` between 10 and 15.
-- Use `performance.profile: "low-power"` for 10 FPS or `"balanced"` for 15 FPS.
+- Start with `performance.profile: "low-power"`, `targetFps: 10`, and `adaptive: false` on older laptops.
 - Avoid enabling pose, hands, and face tracking all at once on weak devices. This package currently tracks pose only, but holistic tracking will be heavier when enabled.
 - Run `npm run dev:vanilla` manually from a terminal only when you need the local camera demo. It starts a long-running Vite server.
+- In the vanilla demo, watch detections/sec, average detection time, and skipped frames. Disable “Use gesture stability” to confirm whether raw close-up hand gestures are active before the 3-frame stability filter.
 
 ```ts
 const lowPowerConfig: MotionTrackerConfig = {
@@ -148,6 +150,7 @@ const lowPowerConfig: MotionTrackerConfig = {
   performance: {
     profile: "low-power",
     targetFps: 10,
+    adaptive: false,
   },
 };
 ```
@@ -186,6 +189,11 @@ const tracker = new MotionTracker({
     enabled: true,
     names: ["handUp", "leftHandUp", "rightHandUp", "bothHandsUp"],
     minConfidence: 0.5,
+    stability: {
+      enabled: true,
+      activeFrames: 3,
+      inactiveFrames: 3,
+    },
   },
   exercises: {
     enabled: false,
@@ -207,7 +215,7 @@ tracker.on("gesture", (gesture) => {
 await tracker.start();
 ```
 
-The hand-up detectors compare wrist and shoulder landmarks. A hand is considered up when the wrist landmark is clearly above the matching shoulder landmark and the required landmarks are visible enough.
+The hand-up detectors compare the highest visible hand point against the matching shoulder. The hand point can be wrist, index, pinky, or thumb; a hand is considered up when that point is clearly above the shoulder and the required landmarks are visible enough.
 
 `leftHandUp` and `rightHandUp` use MediaPipe's anatomical landmark labels, so "left" means the tracked person's left side, not the viewer's left side in a mirrored camera preview. `leftHandUp`, `rightHandUp`, and `bothHandsUp` are intended for mostly front-facing poses and may stay inactive for side-facing poses to avoid mislabeled hands. For side-facing workout positions, prefer `handUp`; it activates when at least one clearly visible wrist is above its matching shoulder and does not require a front-facing body.
 
@@ -337,7 +345,7 @@ export function MotionTrackerPanel() {
         facingMode: "user",
         width: 640,
         height: 480,
-        frameRate: 15,
+        frameRate: 10,
       },
       pose: {
         modelAssetPath:
@@ -359,7 +367,9 @@ export function MotionTrackerPanel() {
         enabled: false,
       },
       performance: {
-        profile: "balanced",
+        profile: "low-power",
+        targetFps: 10,
+        adaptive: false,
       },
     }),
     [],
@@ -408,7 +418,7 @@ Then:
 5. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
-By default it requests 640x480 at 15 FPS and uses the balanced performance profile. Enable Low power mode before clicking Start to request 10 FPS and use the low-power profile.
+By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering.
 
 ## Useful Scripts
 

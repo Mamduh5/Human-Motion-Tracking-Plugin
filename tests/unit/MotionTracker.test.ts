@@ -163,6 +163,109 @@ describe("MotionTracker", () => {
     expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
   });
 
+  it("keeps default gesture stability at three active frames", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose(), createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    raf.flushFrame(2);
+    expect(gestureHandler).not.toHaveBeenCalled();
+    raf.flushFrame(3);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
+  it("uses configured gesture stability activeFrames when enabled", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: true,
+            activeFrames: 2,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+    expect(gestureHandler).not.toHaveBeenCalled();
+    raf.flushFrame(2);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
+  it("emits gestures immediately when gesture stability is disabled", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: false,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+    const debugHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    tracker.on("gestureDebug", debugHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+    expect(debugHandler).toHaveBeenCalledWith(expect.objectContaining({ stabilityEmitted: true }));
+  });
+
+  it("emits gestures immediately when activeFrames is one", async () => {
+    const { tracker, raf } = createMotionTracker({
+      landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose()]),
+      config: {
+        gestures: {
+          enabled: true,
+          names: ["leftHandUp"],
+          minConfidence: 0,
+          stability: {
+            enabled: true,
+            activeFrames: 1,
+          },
+        },
+      },
+    });
+    const gestureHandler = vi.fn();
+
+    tracker.on("gesture", gestureHandler);
+    await tracker.start();
+    raf.flushFrame(1);
+
+    expect(gestureHandler).toHaveBeenCalledTimes(1);
+    expect(gestureHandler).toHaveBeenCalledWith(expect.objectContaining({ name: "leftHandUp", active: true }));
+  });
+
   it("keeps stable gesture event behavior unchanged while reporting debug emission status", async () => {
     const { tracker, raf } = createMotionTracker({
       landmarkTracker: createSequentialLandmarkTrackerMock([createLeftHandUpPose(), createLeftHandUpPose(), createLeftHandUpPose()]),
@@ -487,6 +590,26 @@ describe("MotionTracker", () => {
     expect(vi.mocked(quality.landmarkTracker.detect).mock.calls.length).toBeGreaterThan(
       vi.mocked(lowPower.landmarkTracker.detect).mock.calls.length,
     );
+  });
+
+  it("uses the low-power performance profile target FPS for throttling", async () => {
+    const { tracker, landmarkTracker, raf } = createMotionTracker({
+      config: {
+        performance: {
+          profile: "low-power",
+          targetFps: undefined,
+        },
+      },
+    });
+
+    await tracker.start();
+    flushFrames(raf, [0, 16, 32, 48, 64, 100]);
+
+    expect(landmarkTracker.detect).toHaveBeenCalledTimes(2);
+    expect(tracker.getState()).toMatchObject({
+      lastDetectionTimestamp: 100,
+      framesSkipped: 4,
+    });
   });
 
   it("start and stop remain responsive when detection is throttled", async () => {

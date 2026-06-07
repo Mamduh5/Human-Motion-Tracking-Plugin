@@ -12,6 +12,13 @@ export interface GestureConfig {
   enabled: boolean;
   names?: string[];
   minConfidence?: number;
+  stability?: GestureStabilityConfig;
+}
+
+export interface GestureStabilityConfig {
+  enabled?: boolean;
+  activeFrames?: number;
+  inactiveFrames?: number;
 }
 
 export interface ExerciseConfig {
