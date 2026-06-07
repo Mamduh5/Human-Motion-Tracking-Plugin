@@ -5,3 +5,4 @@ examples/*/dist/
 .vite/
 *.log
 .DS_Store
+coverage/
