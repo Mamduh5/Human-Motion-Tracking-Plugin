@@ -23,3 +23,14 @@ export type { Point2D, PoseLandmarkName, SmoothingFilterOptions, UnnamedLandmark
 export { PoseTracker, TrackerProvider } from "./trackers/index";
 export type { MotionLandmarkTracker, PoseTrackerConfig, TrackerProviderConfig, TrackerProviderMode } from "./trackers/index";
 export type * from "./types/index";
+export {
+  averageConfidence,
+  calculateAngle,
+  distance2D,
+  distance3D,
+  getTimestamp,
+  isLandmarkVisible,
+  landmarkDistance2D,
+  landmarkDistance3D,
+} from "./utils/index";
+export type { Point3D } from "./utils/index";

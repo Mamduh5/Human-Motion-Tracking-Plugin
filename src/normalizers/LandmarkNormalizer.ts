@@ -1,4 +1,5 @@
 import type { Landmark } from "../types";
+import { averageConfidence, isLandmarkVisible } from "../utils";
 
 export const POSE_LANDMARK_NAMES = [
   "nose",
@@ -65,7 +66,7 @@ export function getLandmarksByName(landmarks: Landmark[], names: string[]): Land
 }
 
 export function filterLandmarksByVisibility(landmarks: Landmark[], minVisibility: number): Landmark[] {
-  return landmarks.filter((landmark) => (landmark.visibility ?? 1) >= minVisibility);
+  return landmarks.filter((landmark) => isLandmarkVisible(landmark, minVisibility));
 }
 
 export function filterLandmarksByConfidence(landmarks: Landmark[], minConfidence: number): Landmark[] {
@@ -73,15 +74,5 @@ export function filterLandmarksByConfidence(landmarks: Landmark[], minConfidence
 }
 
 export function calculateLandmarkConfidence(landmarks: Pick<Landmark, "visibility">[]): number {
-  const visibilityValues = landmarks
-    .map((landmark) => landmark.visibility)
-    .filter((visibility): visibility is number => typeof visibility === "number");
-
-  if (visibilityValues.length === 0) {
-    return 1;
-  }
-
-  const totalVisibility = visibilityValues.reduce((total, visibility) => total + visibility, 0);
-
-  return totalVisibility / visibilityValues.length;
+  return averageConfidence(landmarks);
 }
