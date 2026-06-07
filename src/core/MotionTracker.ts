@@ -198,17 +198,17 @@ export class MotionTracker {
 }
 
 function getRequestAnimationFrame(): RequestAnimationFrame {
-  if (typeof requestAnimationFrame !== "function") {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
     throw new Error("requestAnimationFrame is unavailable. MotionTracker must run in a browser context.");
   }
 
-  return requestAnimationFrame;
+  return (callback) => window.requestAnimationFrame(callback);
 }
 
 function getCancelAnimationFrame(): CancelAnimationFrame {
-  if (typeof cancelAnimationFrame !== "function") {
+  if (typeof window === "undefined" || typeof window.cancelAnimationFrame !== "function") {
     throw new Error("cancelAnimationFrame is unavailable. MotionTracker must run in a browser context.");
   }
 
-  return cancelAnimationFrame;
+  return (handle) => window.cancelAnimationFrame(handle);
 }
