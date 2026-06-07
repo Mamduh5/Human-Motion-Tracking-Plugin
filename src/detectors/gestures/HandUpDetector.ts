@@ -3,8 +3,10 @@ import type { GestureResult, Landmark, PoseResult } from "../../types";
 import { averageConfidence, isLandmarkVisible } from "../../utils";
 
 const MIN_VISIBILITY = 0.5;
+const HAND_UP_Y_MARGIN = 0.03;
 
 type HandSide = "left" | "right";
+type InactiveReason = "missing-landmarks" | "low-visibility" | "not-high-enough";
 
 export function detectLeftHandUp(pose: PoseResult): GestureResult {
   return detectHandUp(pose, "left");
@@ -17,18 +19,25 @@ export function detectRightHandUp(pose: PoseResult): GestureResult {
 export function detectBothHandsUp(pose: PoseResult): GestureResult {
   const left = getRequiredLandmarks(pose, "left");
   const right = getRequiredLandmarks(pose, "right");
-  const landmarks = [left.wrist, left.shoulder, right.wrist, right.shoulder].filter(
-    (landmark): landmark is Landmark => Boolean(landmark),
-  );
 
   if (!left.wrist || !left.shoulder || !right.wrist || !right.shoulder) {
     return createGestureResult("bothHandsUp", pose.timestamp, false, 0, { reason: "missing-landmarks" });
   }
 
-  const leftActive = isWristAboveShoulder(left.wrist, left.shoulder);
-  const rightActive = isWristAboveShoulder(right.wrist, right.shoulder);
+  const landmarks = [left.wrist, left.shoulder, right.wrist, right.shoulder];
+  const confidence = averageConfidence(landmarks);
+  const inactiveReason = getHandUpInactiveReason(landmarks, [
+    [left.wrist, left.shoulder],
+    [right.wrist, right.shoulder],
+  ]);
 
-  return createGestureResult("bothHandsUp", pose.timestamp, leftActive && rightActive, averageConfidence(landmarks));
+  return createGestureResult(
+    "bothHandsUp",
+    pose.timestamp,
+    !inactiveReason,
+    confidence,
+    inactiveReason ? { reason: inactiveReason } : undefined,
+  );
 }
 
 function detectHandUp(pose: PoseResult, side: HandSide): GestureResult {
@@ -40,9 +49,16 @@ function detectHandUp(pose: PoseResult, side: HandSide): GestureResult {
   }
 
   const landmarks = [wrist, shoulder];
-  const visible = landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY));
+  const confidence = averageConfidence(landmarks);
+  const inactiveReason = getHandUpInactiveReason(landmarks, [[wrist, shoulder]]);
 
-  return createGestureResult(name, pose.timestamp, visible && isWristAboveShoulder(wrist, shoulder), averageConfidence(landmarks));
+  return createGestureResult(
+    name,
+    pose.timestamp,
+    !inactiveReason,
+    confidence,
+    inactiveReason ? { reason: inactiveReason } : undefined,
+  );
 }
 
 function getRequiredLandmarks(pose: PoseResult, side: HandSide): { wrist?: Landmark; shoulder?: Landmark } {
@@ -52,8 +68,20 @@ function getRequiredLandmarks(pose: PoseResult, side: HandSide): { wrist?: Landm
   };
 }
 
-function isWristAboveShoulder(wrist: Landmark, shoulder: Landmark): boolean {
-  return wrist.y < shoulder.y;
+function getHandUpInactiveReason(landmarks: Landmark[], wristShoulderPairs: Array<[Landmark, Landmark]>): InactiveReason | undefined {
+  if (!landmarks.every((landmark) => isLandmarkVisible(landmark, MIN_VISIBILITY))) {
+    return "low-visibility";
+  }
+
+  if (!wristShoulderPairs.every(([wrist, shoulder]) => isWristClearlyAboveShoulder(wrist, shoulder))) {
+    return "not-high-enough";
+  }
+
+  return undefined;
+}
+
+function isWristClearlyAboveShoulder(wrist: Landmark, shoulder: Landmark): boolean {
+  return wrist.y < shoulder.y - HAND_UP_Y_MARGIN;
 }
 
 function createGestureResult(

@@ -4,7 +4,7 @@ import { detectArmsOpen, detectBothHandsUp, detectLeftHandUp, detectRightHandUp,
 import type { Landmark, PoseResult } from "../../src/types";
 
 describe("gesture detectors", () => {
-  it("detects left, right, and both hands up", () => {
+  it("detects both hands up front-facing", () => {
     const pose = createPose([
       landmark("leftShoulder", 11, 0.3, 0.4),
       landmark("rightShoulder", 12, 0.7, 0.4),
@@ -17,10 +17,97 @@ describe("gesture detectors", () => {
     expect(detectBothHandsUp(pose)).toMatchObject({ name: "bothHandsUp", active: true, confidence: 1 });
   });
 
+  it("does not detect both hands up when only the left hand is up", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.2),
+      landmark("rightWrist", 16, 0.7, 0.39),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true });
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: false,
+      metadata: { reason: "not-high-enough" },
+    });
+  });
+
+  it("does not detect both hands up when only the right hand is up", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.39),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectRightHandUp(pose)).toMatchObject({ name: "rightHandUp", active: true });
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: false,
+      metadata: { reason: "not-high-enough" },
+    });
+  });
+
+  it("does not detect both hands up when a side-facing opposite wrist is low visibility", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.45, 0.4),
+      landmark("rightShoulder", 12, 0.5, 0.4),
+      landmark("leftWrist", 15, 0.42, 0.2),
+      landmark("rightWrist", 16, 0.5, 0.19, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: true });
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: false,
+      metadata: { reason: "low-visibility" },
+    });
+  });
+
+  it("does not detect active hand-up gestures with low-visibility landmarks", () => {
+    const pose = createPose([
+      landmark("leftShoulder", 11, 0.3, 0.4),
+      landmark("rightShoulder", 12, 0.7, 0.4, 0.4),
+      landmark("leftWrist", 15, 0.3, 0.2, 0.4),
+      landmark("rightWrist", 16, 0.7, 0.2),
+    ]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "low-visibility" },
+    });
+    expect(detectRightHandUp(pose)).toMatchObject({
+      name: "rightHandUp",
+      active: false,
+      metadata: { reason: "low-visibility" },
+    });
+    expect(detectBothHandsUp(pose)).toMatchObject({
+      name: "bothHandsUp",
+      active: false,
+      metadata: { reason: "low-visibility" },
+    });
+  });
+
   it("does not detect a hand up when the wrist is below the shoulder", () => {
     const pose = createPose([landmark("leftShoulder", 11, 0.3, 0.4), landmark("leftWrist", 15, 0.3, 0.6)]);
 
-    expect(detectLeftHandUp(pose)).toMatchObject({ name: "leftHandUp", active: false });
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-high-enough" },
+    });
+  });
+
+  it("does not detect a hand up when the wrist is only barely above the shoulder", () => {
+    const pose = createPose([landmark("leftShoulder", 11, 0.3, 0.4), landmark("leftWrist", 15, 0.3, 0.38)]);
+
+    expect(detectLeftHandUp(pose)).toMatchObject({
+      name: "leftHandUp",
+      active: false,
+      metadata: { reason: "not-high-enough" },
+    });
   });
 
   it("fails safely when hand landmarks are missing", () => {
