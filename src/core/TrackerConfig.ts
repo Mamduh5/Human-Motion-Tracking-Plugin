@@ -22,6 +22,11 @@ type ResolvedHandTrackingConfig = HandTrackingConfig & {
   enabled: boolean;
   numHands: number;
   targetFps: number;
+  smoothing: {
+    enabled: boolean;
+    factor: number;
+  };
+  identitySmoothing: boolean;
 };
 
 export type ResolvedMotionTrackerConfig = MotionTrackerConfig & {
@@ -103,6 +108,8 @@ function resolveHandTrackingConfig(hands?: HandTrackingConfig): ResolvedHandTrac
   const enabled = hands?.enabled ?? false;
   const numHands = hands?.numHands ?? DEFAULT_NUM_HANDS;
   const targetFps = hands?.targetFps ?? DEFAULT_HAND_TARGET_FPS;
+  const smoothing = hands?.smoothing ?? {};
+  const smoothingFactor = smoothing.factor ?? 0.35;
 
   if (!Number.isInteger(numHands) || numHands <= 0) {
     throw new Error("MotionTrackerConfig.hands.numHands must be a positive integer.");
@@ -110,6 +117,10 @@ function resolveHandTrackingConfig(hands?: HandTrackingConfig): ResolvedHandTrac
 
   if (!Number.isFinite(targetFps) || targetFps <= 0) {
     throw new Error("MotionTrackerConfig.hands.targetFps must be a positive number.");
+  }
+
+  if (!Number.isFinite(smoothingFactor) || smoothingFactor <= 0 || smoothingFactor > 1) {
+    throw new Error("MotionTrackerConfig.hands.smoothing.factor must be greater than 0 and at most 1.");
   }
 
   if (enabled && !hands?.modelAssetPath) {
@@ -125,5 +136,10 @@ function resolveHandTrackingConfig(hands?: HandTrackingConfig): ResolvedHandTrac
     enabled,
     numHands,
     targetFps,
+    smoothing: {
+      enabled: smoothing.enabled ?? false,
+      factor: smoothingFactor,
+    },
+    identitySmoothing: hands?.identitySmoothing ?? true,
   };
 }

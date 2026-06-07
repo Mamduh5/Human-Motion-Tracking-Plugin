@@ -55,6 +55,11 @@ export interface PoseModelConfig {
   numPoses?: number;
 }
 
+export interface HandTrackingSmoothingConfig {
+  enabled?: boolean;
+  factor?: number;
+}
+
 export interface HandTrackingConfig {
   enabled?: boolean;
   modelAssetPath?: string;
@@ -64,6 +69,8 @@ export interface HandTrackingConfig {
   minHandPresenceConfidence?: number;
   minTrackingConfidence?: number;
   targetFps?: number;
+  smoothing?: HandTrackingSmoothingConfig;
+  identitySmoothing?: boolean;
 }
 
 export interface MotionTrackerConfig {

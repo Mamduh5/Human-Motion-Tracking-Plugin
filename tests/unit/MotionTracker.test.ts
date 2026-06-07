@@ -4,7 +4,7 @@ import { MotionTracker, resolveMotionTrackerConfig } from "../../src/core";
 import type { CameraSource } from "../../src/camera";
 import type { MotionPlugin } from "../../src/plugins";
 import type { HandLandmarkTracker, MotionLandmarkTracker } from "../../src/trackers";
-import type { CalibrationResult, HandResult, Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
+import type { CalibrationResult, Handedness, HandResult, Landmark, MotionTrackerConfig, PoseResult } from "../../src/types";
 
 describe("MotionTracker", () => {
   it("defaults performance config to the balanced profile", () => {
@@ -491,7 +491,121 @@ describe("MotionTracker", () => {
       expect.objectContaining({
         result: handResult,
         detected: true,
+        handsDetected: 1,
+        targetFps: 10,
         skipped: false,
+        averageHandConfidence: 0.9,
+        handedness: [{ handedness: "right", score: 0.9 }],
+        timestamp: 1,
+      }),
+    );
+  });
+
+  it("applies hand smoothing when enabled", async () => {
+    const { tracker, raf } = createMotionTracker({
+      handTracker: createSequentialHandTrackerMock([createHandResult({ x: 0 }), createHandResult({ x: 1 })]),
+      config: {
+        hands: {
+          ...createHandsConfig(),
+          targetFps: 1000,
+          smoothing: {
+            enabled: true,
+            factor: 0.35,
+          },
+        },
+      },
+    });
+    const handsHandler = vi.fn();
+
+    tracker.on("hands", handsHandler);
+
+    await tracker.start();
+    flushFrames(raf, [1, 2]);
+
+    const secondResult = handsHandler.mock.calls[1][0] as HandResult;
+
+    expect(secondResult.hands[0].landmarks[0].x).toBeCloseTo(0.35);
+  });
+
+  it("resets hand smoothing and identity tracking on stop", async () => {
+    const { tracker, raf } = createMotionTracker({
+      handTracker: createSequentialHandTrackerMock([
+        createHandResult({ handedness: "left", x: 0.4 }),
+        createHandResult({ handedness: "right", x: 0.405 }),
+      ]),
+      config: {
+        hands: {
+          ...createHandsConfig(),
+          targetFps: 1000,
+          smoothing: {
+            enabled: true,
+            factor: 0.35,
+          },
+        },
+      },
+    });
+    const handsHandler = vi.fn();
+
+    tracker.on("hands", handsHandler);
+
+    await tracker.start();
+    raf.flushFrame(1);
+    tracker.stop();
+
+    await tracker.start();
+    raf.flushFrame(2);
+
+    const restartedResult = handsHandler.mock.calls[1][0] as HandResult;
+
+    expect(restartedResult.hands[0].handedness).toBe("right");
+    expect(restartedResult.hands[0].landmarks[0].x).toBeCloseTo(0.405);
+  });
+
+  it("emits useful handsDebug information on detected and skipped frames", async () => {
+    const { tracker, raf } = createMotionTracker({
+      handTracker: createHandTrackerMock(createHandResult()),
+      config: {
+        performance: {
+          targetFps: 1000,
+        },
+        hands: {
+          ...createHandsConfig(),
+          targetFps: 10,
+        },
+      },
+    });
+    const debugHandler = vi.fn();
+
+    tracker.on("handsDebug", debugHandler);
+
+    await tracker.start();
+    flushFrames(raf, [0, 50]);
+
+    expect(debugHandler).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        detected: true,
+        handsDetected: 1,
+        targetFps: 10,
+        skipped: false,
+        averageHandConfidence: 0.9,
+        handedness: [{ handedness: "right", score: 0.9 }],
+        timestamp: 0,
+        detectionMs: expect.any(Number),
+      }),
+    );
+    expect(debugHandler).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        result: null,
+        detected: false,
+        handsDetected: 0,
+        targetFps: 10,
+        skipped: true,
+        reason: "throttled",
+        averageHandConfidence: 0,
+        handedness: [],
+        timestamp: 50,
       }),
     );
   });
@@ -1124,6 +1238,14 @@ function createHandTrackerMock(result: HandResult | null): HandLandmarkTracker {
   };
 }
 
+function createSequentialHandTrackerMock(results: Array<HandResult | null>): HandLandmarkTracker {
+  return {
+    initialize: vi.fn().mockResolvedValue(undefined),
+    detect: vi.fn(() => results.shift() ?? null),
+    dispose: vi.fn(),
+  };
+}
+
 function createRafMock() {
   const callbacks: FrameRequestCallback[] = [];
 
@@ -1214,20 +1336,36 @@ function createArmGesturePose(): PoseResult {
   ]);
 }
 
-function createHandResult(): HandResult {
+interface CreateHandResultOptions {
+  handedness?: Handedness;
+  handednessScore?: number;
+  confidence?: number;
+  timestamp?: number;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+function createHandResult(options: CreateHandResultOptions = {}): HandResult {
+  const handedness = options.handedness ?? "right";
+  const handednessScore = options.handednessScore ?? 0.9;
+  const x = options.x ?? 0.5;
+  const y = options.y ?? 0.5;
+
   return {
-    timestamp: 1234,
-    confidence: 0.9,
+    timestamp: options.timestamp ?? 1234,
+    confidence: options.confidence ?? handednessScore,
     hands: [
       {
-        handedness: "right",
-        handednessScore: 0.9,
+        handedness,
+        handednessScore,
         landmarks: [
           {
             name: "wrist",
             index: 0,
-            x: 0.5,
-            y: 0.5,
+            x,
+            y,
+            z: options.z,
           },
         ],
       },

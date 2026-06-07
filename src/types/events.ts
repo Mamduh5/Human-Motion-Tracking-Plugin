@@ -7,7 +7,7 @@ import type {
 } from "./calibration";
 import type { ExerciseResult } from "./exercises";
 import type { GestureResult } from "./gestures";
-import type { HandResult } from "./hands";
+import type { Handedness, HandResult } from "./hands";
 import type { PoseResult } from "./landmarks";
 
 export type TrackerStatus = "idle" | "starting" | "running" | "stopped" | "error";
@@ -36,9 +36,17 @@ export interface GestureDebugEvent {
 export interface HandsDebugEvent {
   result: HandResult | null;
   detected: boolean;
+  handsDetected: number;
   detectionMs?: number;
+  targetFps: number;
   skipped: boolean;
   reason?: string;
+  averageHandConfidence: number;
+  handedness: Array<{
+    handedness: Handedness;
+    score: number;
+  }>;
+  timestamp: number;
 }
 
 export interface MotionTrackerEventMap {

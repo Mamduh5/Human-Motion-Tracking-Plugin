@@ -1,5 +1,8 @@
 export { HolisticTracker } from "./HolisticTracker";
 export { HandTracker, convertHandLandmarkerResult } from "./HandTracker";
+export { HandIdentityTracker } from "./HandIdentityTracker";
+export { HandSmoothingFilter } from "./HandSmoothingFilter";
+export type { HandSmoothingFilterOptions } from "./HandSmoothingFilter";
 export { PoseTracker } from "./PoseTracker";
 export { TrackerProvider } from "./TrackerProvider";
 export type {

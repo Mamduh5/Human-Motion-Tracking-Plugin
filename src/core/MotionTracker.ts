@@ -20,7 +20,14 @@ import {
 } from "../detectors";
 import { EventEmitter } from "../events";
 import { PluginManager, type MotionPlugin, type MotionPluginApi } from "../plugins";
-import { HandTracker, TrackerProvider, type HandLandmarkTracker, type MotionLandmarkTracker } from "../trackers";
+import {
+  HandIdentityTracker,
+  HandSmoothingFilter,
+  HandTracker,
+  TrackerProvider,
+  type HandLandmarkTracker,
+  type MotionLandmarkTracker,
+} from "../trackers";
 import type {
   CalibrationOptions,
   CalibrationResult,
@@ -82,6 +89,8 @@ export class MotionTracker {
   private readonly camera: CameraSource;
   private readonly landmarkTracker: MotionLandmarkTracker;
   private readonly handTracker?: HandLandmarkTracker;
+  private readonly handIdentityTracker = new HandIdentityTracker();
+  private readonly handSmoothingFilter: HandSmoothingFilter;
   private readonly requestFrame: RequestAnimationFrame;
   private readonly cancelFrame: CancelAnimationFrame;
   private readonly now: () => number;
@@ -124,6 +133,7 @@ export class MotionTracker {
           minTrackingConfidence: this.config.hands.minTrackingConfidence,
         })
       : undefined;
+    this.handSmoothingFilter = new HandSmoothingFilter({ factor: this.config.hands.smoothing.factor });
     this.requestFrame = dependencies.requestAnimationFrame ?? getRequestAnimationFrame();
     this.cancelFrame = dependencies.cancelAnimationFrame ?? getCancelAnimationFrame();
     this.now = dependencies.now ?? getTimestamp;
@@ -149,6 +159,7 @@ export class MotionTracker {
       ...this.getPerformanceState(),
     };
     this.gestureStabilityFilter.reset();
+    this.resetHandPostProcessors();
     this.resetExerciseAnalyzers();
 
     try {
@@ -168,6 +179,7 @@ export class MotionTracker {
       this.camera.stop();
       this.landmarkTracker.dispose();
       this.handTracker?.dispose();
+      this.resetHandPostProcessors();
       throw error;
     }
   }
@@ -186,6 +198,7 @@ export class MotionTracker {
     this.camera.stop();
     this.landmarkTracker.dispose();
     this.handTracker?.dispose();
+    this.resetHandPostProcessors();
     this.resetPerformanceCounters();
     this.state = {
       ...this.state,
@@ -343,9 +356,9 @@ export class MotionTracker {
       };
       this.emitHandsDebugEvent({
         result: null,
-        detected: false,
         skipped: true,
         reason: "throttled",
+        timestamp,
       });
       this.scheduleNextFrameIfRunning();
       return;
@@ -377,9 +390,9 @@ export class MotionTracker {
       } else {
         this.emitHandsDebugEvent({
           result: null,
-          detected: false,
           skipped: true,
           reason: "throttled",
+          timestamp,
         });
       }
 
@@ -516,7 +529,8 @@ export class MotionTracker {
     const detectionStartedAt = getTimestamp();
 
     try {
-      const result = this.handTracker.detect(this.videoElement, timestamp);
+      const rawResult = this.handTracker.detect(this.videoElement, timestamp);
+      const result = rawResult ? this.processHandResult(rawResult) : null;
       const detectionMs = Math.max(0, getTimestamp() - detectionStartedAt);
 
       this.lastHandDetectionTimestamp = timestamp;
@@ -527,22 +541,37 @@ export class MotionTracker {
 
       this.emitHandsDebugEvent({
         result,
-        detected: Boolean(result && result.hands.length > 0),
         detectionMs,
         skipped: false,
+        reason: result && result.hands.length > 0 ? undefined : "no-hands",
+        timestamp,
       });
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error(String(error));
 
       this.emitHandsDebugEvent({
         result: null,
-        detected: false,
         detectionMs: Math.max(0, getTimestamp() - detectionStartedAt),
         skipped: false,
         reason: normalizedError.message,
+        timestamp,
       });
       throw error;
     }
+  }
+
+  private processHandResult(result: HandResult): HandResult {
+    let processedResult = result;
+
+    if (this.config.hands.identitySmoothing) {
+      processedResult = this.handIdentityTracker.update(processedResult);
+    }
+
+    if (this.config.hands.smoothing.enabled) {
+      processedResult = this.handSmoothingFilter.update(processedResult);
+    }
+
+    return processedResult;
   }
 
   private getExerciseAnalyzer(name: string): ExerciseAnalyzer | undefined {
@@ -632,9 +661,29 @@ export class MotionTracker {
     this.events.emit("gestureDebug", debugEvent);
   }
 
-  private emitHandsDebugEvent(debugEvent: HandsDebugEvent): void {
+  private resetHandPostProcessors(): void {
+    this.handIdentityTracker.reset();
+    this.handSmoothingFilter.reset();
+  }
+
+  private emitHandsDebugEvent(debugEvent: Pick<HandsDebugEvent, "result" | "skipped" | "timestamp"> &
+    Partial<Pick<HandsDebugEvent, "detectionMs" | "reason">>): void {
     if (this.handTracker) {
-      this.events.emit("handsDebug", debugEvent);
+      const result = debugEvent.result;
+      const handsDetected = result?.hands.length ?? 0;
+
+      this.events.emit("handsDebug", {
+        ...debugEvent,
+        detected: handsDetected > 0,
+        handsDetected,
+        targetFps: this.config.hands.targetFps,
+        averageHandConfidence: result?.confidence ?? 0,
+        handedness:
+          result?.hands.map((hand) => ({
+            handedness: hand.handedness,
+            score: hand.handednessScore,
+          })) ?? [],
+      });
     }
   }
 

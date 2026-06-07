@@ -17,6 +17,7 @@ export type {
   GestureConfig,
   GestureStabilityConfig,
   HandTrackingConfig,
+  HandTrackingSmoothingConfig,
   MotionTrackerConfig,
   PerformanceConfig,
   PerformanceProfile,

@@ -136,6 +136,11 @@ const tracker = new MotionTracker({
     wasmAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
     numHands: 2,
     targetFps: 10,
+    identitySmoothing: true,
+    smoothing: {
+      enabled: false,
+      factor: 0.35,
+    },
   },
 });
 
@@ -145,6 +150,8 @@ tracker.on("hands", (result) => {
 ```
 
 MediaPipe Hand Landmarker runs synchronously and can add noticeable CPU/GPU load. On low-power laptops, keep pose detection around 10-15 FPS and hand detection around 5-10 FPS. Hands are disabled by default and the vanilla demo only enables them when selected before Start.
+
+Handedness can flicker for a frame, especially with mirrored webcam previews or low confidence detections. `hands.identitySmoothing` defaults to true and keeps obvious one-frame left/right flips stable when the hand remains spatially close. `hands.smoothing.enabled` applies lightweight exponential smoothing to hand landmarks; it reduces jitter but adds slight visual latency.
 
 ## Calibration
 
@@ -234,7 +241,7 @@ npm run dev:vanilla
 ```
 
 Open the Vite URL, allow camera access, then use the Start and Stop buttons. The example displays the camera preview, draws pose landmarks on a canvas overlay, and shows active gestures including `handUp`, `leftHandUp`, `rightHandUp`, `bothHandsUp`, `armsUp`, `armsCrossed`, and `handsOnHips`.
-The example defaults to 640x480 at 10 FPS with the low-power performance profile. It also shows detections/sec, average detection time, skipped frames, raw gesture debug, calibration controls, optional hand tracking controls, and a “Use gesture stability” checkbox.
+The example defaults to 640x480 at 10 FPS with the low-power performance profile. It also shows detections/sec, average detection time, skipped frames, raw gesture debug, calibration controls, optional hand tracking controls, hand debug metadata, and a “Use gesture stability” checkbox.
 
 Manual calibration test:
 
@@ -247,7 +254,8 @@ Manual calibration test:
 7. Click Clear saved calibration and confirm the source returns to "none".
 8. Raise a hand in both close-up and full-body framing and compare gesture behavior before and after calibration.
 9. Stop tracking, enable hand tracking, then Start again.
-10. Confirm hand count, handedness, confidence, and hands target FPS update when hands are visible.
+10. Confirm hand count, handedness, confidence, detection time, target FPS, skipped frames, and skipped reason update when hands are visible.
+11. Toggle Smooth hand landmarks and Stabilize handedness before Start to compare jitter and one-frame left/right flicker.
 
 `leftHandUp` and `rightHandUp` use anatomical MediaPipe labels and are intended for mostly front-facing poses. Use `handUp` when side-facing workout positions need support; it activates when at least one visible wrist is clearly above its matching shoulder without requiring a front-facing body.
 The arm-pose gestures use Pose Landmarker body landmarks only. They do not require or enable MediaPipe hand tracking.

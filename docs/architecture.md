@@ -62,6 +62,8 @@ You can inject your own `CameraSource` through `MotionTrackerDependencies` for t
 
 Hand Landmarker `detectForVideo` is synchronous and can block the UI thread, so `MotionTracker` uses a separate hand detection throttle. The default hand target FPS is 10, and low-power apps should generally use 5-10 FPS for hands while keeping pose around 10-15 FPS.
 
+After raw hand detection, `MotionTracker` can pass results through two lightweight post-processors. `HandIdentityTracker` is enabled by default through `hands.identitySmoothing` and smooths obvious one-frame left/right handedness flips by comparing the wrist/palm position to the previous frame. `HandSmoothingFilter` is optional through `hands.smoothing.enabled`; it uses exponential smoothing for landmark x/y/z positions, reducing jitter at the cost of slight latency.
+
 The hand foundation emits landmarks only. Finger gestures are not implemented yet.
 
 ### Normalizers and Utilities
@@ -192,7 +194,7 @@ The live tracking flow is:
 10. If calibration is collecting, the pose is sampled and calibration progress or completion events may emit.
 11. Enabled gesture detectors emit `gesture` using precision, calibration, and user threshold resolution.
 12. Enabled exercise analyzers emit `exercise`.
-13. If hand tracking is enabled and its separate target FPS allows it, `handTracker.detect(video, timestamp)` runs and may emit `hands`.
+13. If hand tracking is enabled and its separate target FPS allows it, `handTracker.detect(video, timestamp)` runs, optional hand identity/landmark smoothing is applied, and `hands`/`handsDebug` may emit.
 14. Plugins receive each relevant event and may emit derived events.
 15. App calls `stop()`, which cancels the frame loop, stops camera tracks, disposes MediaPipe, and emits `stopped`.
 
@@ -253,6 +255,11 @@ interface MotionTrackerConfig {
     minHandPresenceConfidence?: number;
     minTrackingConfidence?: number;
     targetFps?: number;
+    smoothing?: {
+      enabled?: boolean;
+      factor?: number;
+    };
+    identitySmoothing?: boolean;
   };
   calibration?: {
     enabled?: boolean;
@@ -271,7 +278,7 @@ For `mode: "pose"`, both `pose.modelAssetPath` and `pose.wasmAssetPath` are requ
 Performance defaults to the balanced profile at 15 FPS. The low-power profile defaults to 10 FPS, and the quality profile defaults to 30 FPS.
 Gesture stability defaults to enabled with three active frames and three inactive frames.
 Gesture precision defaults to balanced. The loose preset is more sensitive; the strict preset reduces false positives.
-Hand tracking defaults to disabled. When enabled, model and wasm asset paths are required, `numHands` defaults to 2, and `hands.targetFps` defaults to 10.
+Hand tracking defaults to disabled. When enabled, model and wasm asset paths are required, `numHands` defaults to 2, and `hands.targetFps` defaults to 10. Hand identity smoothing defaults to enabled. Landmark smoothing defaults to disabled with a default factor of 0.35 when enabled.
 Calibration is optional. `autoApply` applies completed recommended thresholds automatically; explicit `gestures.thresholds` still win.
 
 ## Browser-Only Camera Requirements

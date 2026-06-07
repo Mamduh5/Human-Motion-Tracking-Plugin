@@ -100,6 +100,14 @@ Use this checklist to verify the vanilla web demo from a clean checkout or after
 - [ ] Lower both hands.
 - [ ] Confirm `Active gestures` returns to `None`.
 
+## Optional Hand Tracking Debug
+
+- [ ] Stop tracking, enable hand tracking, then Start again.
+- [ ] Show one or both hands and confirm hand count, handedness, handedness score, average confidence, detection time, target FPS, skipped frames, and skipped reason update.
+- [ ] Confirm hand tracking remains off by default after a page reload.
+- [ ] Toggle Smooth hand landmarks before Start and confirm landmark jitter is reduced, accepting slight visual latency.
+- [ ] Toggle Stabilize handedness before Start and confirm obvious one-frame left/right flicker is reduced when a hand stays in the same place.
+
 ## Squat Analyzer Behavior If Visible In Demo
 
 - [ ] Check whether the vanilla demo shows any squat, exercise, rep count, or movement-stage output.

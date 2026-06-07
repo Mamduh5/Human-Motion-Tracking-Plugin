@@ -198,6 +198,11 @@ const tracker = new MotionTracker({
     minHandPresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,
     targetFps: 10,
+    identitySmoothing: true,
+    smoothing: {
+      enabled: false,
+      factor: 0.35,
+    },
   },
 });
 
@@ -206,11 +211,17 @@ tracker.on("hands", (result) => {
     console.log(hand.handedness, hand.handednessScore, hand.landmarks);
   }
 });
+
+tracker.on("handsDebug", (debug) => {
+  console.log(debug.handsDetected, debug.detectionMs, debug.skipped, debug.reason);
+});
 ```
 
 MediaPipe Hand Landmarker `detectForVideo` is synchronous and can block the UI thread. Use a lower hand detection rate than pose detection when possible. For low-power devices, start with pose `performance.targetFps` between 10 and 15 and `hands.targetFps` between 5 and 10.
 
 If `hands.enabled` is true, `hands.modelAssetPath` and `hands.wasmAssetPath` are required. If hand tracking fails to initialize, `MotionTracker.start()` fails and emits an `error` event with a MediaPipe asset-loading message.
+
+Handedness can flicker in mirrored webcam previews or low confidence frames. `hands.identitySmoothing` defaults to true and reduces obvious one-frame left/right flips by keeping a nearby hand assigned to its previous side. Landmark smoothing is optional: `hands.smoothing.enabled` applies exponential smoothing to hand x/y/z positions, which reduces jitter but adds slight latency.
 
 ## Calibration
 
@@ -595,11 +606,12 @@ Then:
 9. Try close-up and full-body framing after calibration to compare gesture threshold scaling.
 10. Turn mostly side-facing and raise one visible hand to confirm `handUp` can stay active even when left/right-specific gestures are inactive.
 11. Click Stop, enable hand tracking, and click Start again.
-12. Show one or both hands and confirm hand count, handedness, confidence, and hands target FPS update.
-13. Click Stop to stop the stream.
+12. Show one or both hands and confirm hand count, handedness, handedness score, average confidence, detection time, target FPS, skipped frames, and skipped reason update.
+13. Toggle Smooth hand landmarks and Stabilize handedness before Start to compare jitter and one-frame left/right flicker.
+14. Click Stop to stop the stream.
 
 The example lives in `examples/vanilla-web`. It imports the SDK from `src/` for local development, passes an existing video element into `CameraManager`, renders landmarks on a canvas overlay, and displays active gestures.
-By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes. Hand tracking is off by default; changing the hand tracking checkbox while running requires a restart.
+By default it requests 640x480 at 10 FPS and uses the low-power performance profile. Use the performance readout to compare heat-related settings. The Precision select rebuilds the tracker on the next Start. Enable Show gesture debug to inspect raw detector results and disable Use gesture stability to see whether close-up left/right/both gestures are active before filtering. Calibration is applied automatically in the demo after it completes. Hand tracking is off by default; changing hand tracking, hand smoothing, or handedness stabilization while running requires a restart.
 
 ## Useful Scripts
 

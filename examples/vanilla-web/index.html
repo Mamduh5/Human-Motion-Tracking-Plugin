@@ -323,6 +323,18 @@
           <p class="label">Hands target FPS</p>
           <p id="handTargetFps" class="value">off</p>
         </div>
+        <div>
+          <p class="label">Hand detect</p>
+          <p id="handDetectionMs" class="value">0.0 ms</p>
+        </div>
+        <div>
+          <p class="label">Hand skipped</p>
+          <p id="handSkippedFrames" class="value">0</p>
+        </div>
+        <div>
+          <p class="label">Hand skip reason</p>
+          <p id="handSkippedReason" class="value value-small">None</p>
+        </div>
       </section>
 
       <label class="debug-toggle">
@@ -337,6 +349,16 @@
       <label class="debug-toggle">
         <input id="handTrackingToggle" type="checkbox" />
         Enable hand tracking
+      </label>
+
+      <label class="debug-toggle">
+        <input id="handSmoothingToggle" type="checkbox" checked />
+        Smooth hand landmarks
+      </label>
+
+      <label class="debug-toggle">
+        <input id="handIdentityToggle" type="checkbox" checked />
+        Stabilize handedness
       </label>
 
       <label class="debug-toggle">
